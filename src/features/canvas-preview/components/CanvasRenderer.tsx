@@ -107,9 +107,9 @@ const CanvasRendererComponent: React.FC<CanvasRendererProps> = ({ baseWidth, bas
     frameExtractorRef.current?.setPlaybackMode(isPlaying);
 
     if (isPlaying) {
-      startRAFLoop();
+      startPlayback();
     } else {
-      stopRAFLoop();
+      stopPlayback();
       stopAudioPlayback();
       stopVideoPlayback();
       // When pausing, render the exact frame via FFmpeg for accuracy
@@ -117,7 +117,7 @@ const CanvasRendererComponent: React.FC<CanvasRendererProps> = ({ baseWidth, bas
     }
 
     return () => {
-      stopRAFLoop();
+      stopPlayback();
       stopAudioPlayback();
       stopVideoPlayback();
     };
@@ -131,10 +131,21 @@ const CanvasRendererComponent: React.FC<CanvasRendererProps> = ({ baseWidth, bas
 
     if (!audioElement) {
       try {
-        audioElement = new Audio(sourceMediaPath);
+        audioElement = document.createElement("audio");
+        audioElement.src = sourceMediaPath;
         audioElement.preload = "auto";
-        audioElement.volume = 1.0;
+        audioElement.crossOrigin = "anonymous";
+        document.body.appendChild(audioElement);
         audioElementsRef.current.set(sourceMediaPath, audioElement);
+
+        // Log when audio is ready
+        audioElement.addEventListener("canplay", () => {
+          console.log("[Audio] Ready:", sourceMediaPath);
+        });
+
+        audioElement.addEventListener("error", (e) => {
+          console.error("[Audio] Error:", sourceMediaPath, e);
+        });
       } catch (error) {
         console.error("Failed to create audio element:", error);
         return null;
@@ -147,7 +158,7 @@ const CanvasRendererComponent: React.FC<CanvasRendererProps> = ({ baseWidth, bas
   /**
    * Start audio playback
    */
-  const startAudioPlayback = (clips: ActiveClip[]) => {
+  const startAudioPlayback = async (clips: ActiveClip[]) => {
     if (clips.length === 0) return;
 
     const currentTimelineTime = useTimelineStore.getState().playhead;
@@ -155,15 +166,36 @@ const CanvasRendererComponent: React.FC<CanvasRendererProps> = ({ baseWidth, bas
     for (const clip of clips) {
       const audioElement = setupAudioElement(clip.sourceMediaPath);
 
-      if (audioElement) {
-        const timeIntoClip = currentTimelineTime - clip.startTime;
-        const audioStartTime = clip.sourceStart + timeIntoClip;
+      if (!audioElement) continue;
+
+      const timeIntoClip = currentTimelineTime - clip.startTime;
+      const audioStartTime = clip.sourceStart + timeIntoClip;
+
+      try {
+        // Wait for audio to be ready
+        if (audioElement.readyState < 2) {
+          console.log("[Audio] Waiting for canplay...");
+          await new Promise<void>((resolve, reject) => {
+            const timeout = setTimeout(() => reject(new Error("Audio load timeout")), 5000);
+            const onCanPlay = () => {
+              clearTimeout(timeout);
+              audioElement.removeEventListener("canplay", onCanPlay);
+              resolve();
+            };
+            audioElement.addEventListener("canplay", onCanPlay);
+          });
+        }
 
         audioElement.currentTime = audioStartTime;
         audioElement.playbackRate = 1.0;
-        audioElement.play().catch((error) => {
-          console.error("Failed to start audio:", error);
-        });
+        await audioElement.play();
+        console.log("[Audio] Started at", audioStartTime);
+      } catch (error: any) {
+        if (error.name === "AbortError") {
+          console.log("[Audio] Play aborted (user paused or switched)");
+        } else {
+          console.error("[Audio] Failed to start:", error);
+        }
       }
     }
   };
@@ -223,7 +255,7 @@ const CanvasRendererComponent: React.FC<CanvasRendererProps> = ({ baseWidth, bas
   /**
    * Start video playback (for smooth canvas rendering)
    */
-  const startVideoPlayback = (clips: ActiveClip[]) => {
+  const startVideoPlayback = async (clips: ActiveClip[]) => {
     if (clips.length === 0) return;
 
     const currentTimelineTime = useTimelineStore.getState().playhead;
@@ -231,15 +263,36 @@ const CanvasRendererComponent: React.FC<CanvasRendererProps> = ({ baseWidth, bas
     for (const clip of clips) {
       const videoElement = setupVideoElement(clip.sourceMediaPath);
 
-      if (videoElement) {
-        const timeIntoClip = currentTimelineTime - clip.startTime;
-        const videoStartTime = clip.sourceStart + timeIntoClip;
+      if (!videoElement) continue;
+
+      const timeIntoClip = currentTimelineTime - clip.startTime;
+      const videoStartTime = clip.sourceStart + timeIntoClip;
+
+      try {
+        // Wait for video to be ready
+        if (videoElement.readyState < 2) {
+          console.log("[Video] Waiting for canplay...");
+          await new Promise<void>((resolve, reject) => {
+            const timeout = setTimeout(() => reject(new Error("Video load timeout")), 5000);
+            const onCanPlay = () => {
+              clearTimeout(timeout);
+              videoElement.removeEventListener("canplay", onCanPlay);
+              resolve();
+            };
+            videoElement.addEventListener("canplay", onCanPlay);
+          });
+        }
 
         videoElement.currentTime = videoStartTime;
         videoElement.playbackRate = 1.0;
-        videoElement.play().catch((error) => {
-          console.error("Failed to start video:", error);
-        });
+        await videoElement.play();
+        console.log("[Video] Started at", videoStartTime);
+      } catch (error: any) {
+        if (error.name === "AbortError") {
+          console.log("[Video] Play aborted (user paused or switched)");
+        } else {
+          console.error("[Video] Failed to start:", error);
+        }
       }
     }
   };
@@ -315,35 +368,45 @@ const CanvasRendererComponent: React.FC<CanvasRendererProps> = ({ baseWidth, bas
     }
   };
 
+  // Timeline update interval ref
+  const timelineIntervalRef = useRef<NodeJS.Timeout | null>(null);
+
   /**
-   * Start RAF loop for playback - uses video elements for smooth playback
-   * Optimized: only updates timeline every 100ms (10fps) to reduce React re-renders
-   * Canvas renders at 60fps, timeline updates at 10fps for performance
+   * Start playback - video on RAF, timeline on setInterval (decoupled)
    */
-  const startRAFLoop = () => {
+  const startPlayback = () => {
     if (rafIdRef.current) {
       cancelAnimationFrame(rafIdRef.current);
     }
+    if (timelineIntervalRef.current) {
+      clearInterval(timelineIntervalRef.current);
+    }
+
+    console.log("[Playback] Starting...");
 
     // Get active clips
     const activeClips = frameResolver.getActiveClips(playhead);
     if (activeClips.length > 0) {
-      // Start video and audio playback
+      activeClipsRef.current = activeClips as ActiveClip[];
+      // Start async (don't block RAF)
       startVideoPlayback(activeClips as ActiveClip[]);
       startAudioPlayback(activeClips as ActiveClip[]);
-      activeClipsRef.current = activeClips as ActiveClip[];
     }
 
-    let lastTime = performance.now();
-    let lastPlayheadUpdate = 0;
+    // Video render loop - runs at 30fps
     let frameSkipCounter = 0;
+    const videoLoop = () => {
+      frameSkipCounter++;
+      if (frameSkipCounter % 2 === 0) {
+        renderVideoFrames();
+      }
+      rafIdRef.current = requestAnimationFrame(videoLoop);
+    };
+    rafIdRef.current = requestAnimationFrame(videoLoop);
 
-    const loop = () => {
-      const now = performance.now();
-      const deltaTime = (now - lastTime) / 1000;
-      lastTime = now;
-
-      // Get time from video if available, otherwise from audio, otherwise manual
+    // Timeline update loop - completely decoupled from RAF
+    // Runs at 10fps, doesn't block video/audio
+    timelineIntervalRef.current = setInterval(() => {
       const videoTime = getVideoTime();
       const audioTime = getAudioTime();
       let currentTime: number;
@@ -353,8 +416,7 @@ const CanvasRendererComponent: React.FC<CanvasRendererProps> = ({ baseWidth, bas
       } else if (audioTime !== null) {
         currentTime = audioTime;
       } else {
-        // Fallback: advance by delta
-        currentTime = useTimelineStore.getState().playhead + deltaTime;
+        return; // No media playing, skip update
       }
 
       // Stop if at end
@@ -364,34 +426,23 @@ const CanvasRendererComponent: React.FC<CanvasRendererProps> = ({ baseWidth, bas
         return;
       }
 
-      // Update playhead only every ~100ms (10fps) to reduce React re-renders
-      // This is crucial - too frequent updates cause audio/video jank
-      if (now - lastPlayheadUpdate > 100) {
-        useTimelineStore.getState().setPlayhead(currentTime, false);
-        lastPlayheadUpdate = now;
-      }
-
-      // Render video frames every frame (60fps) for smooth playback
-      // Skip every 2nd frame during playback to reduce CPU load (30fps canvas)
-      frameSkipCounter++;
-      if (frameSkipCounter % 2 === 0) {
-        renderVideoFrames();
-      }
-
-      rafIdRef.current = requestAnimationFrame(loop);
-    };
-
-    rafIdRef.current = requestAnimationFrame(loop);
+      useTimelineStore.getState().setPlayhead(currentTime, false);
+    }, 100); // 10fps
   };
 
   /**
-   * Stop RAF loop
+   * Stop playback
    */
-  const stopRAFLoop = () => {
+  const stopPlayback = () => {
     if (rafIdRef.current) {
       cancelAnimationFrame(rafIdRef.current);
       rafIdRef.current = null;
     }
+    if (timelineIntervalRef.current) {
+      clearInterval(timelineIntervalRef.current);
+      timelineIntervalRef.current = null;
+    }
+    console.log("[Playback] Stopped");
   };
 
   /**
