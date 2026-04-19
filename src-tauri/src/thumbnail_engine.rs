@@ -25,6 +25,8 @@ pub enum DensityLevel {
     Medium = 1,
     /// High density: one frame every 0.2 seconds (zoomed in)
     High = 2,
+    /// Ultra density: one frame every 0.02 seconds (max zoom)
+    Ultra = 3,
 }
 
 impl DensityLevel {
@@ -34,10 +36,12 @@ impl DensityLevel {
             DensityLevel::Low => 5.0,
             DensityLevel::Medium => 1.0,
             DensityLevel::High => 0.2,
+            DensityLevel::Ultra => 0.02,
         }
     }
 
     /// Select appropriate density based on zoom (pixels per second)
+    /// Ultra density kicks in at >4000 px/sec (time_per_thumb < 0.02s)
     pub fn from_zoom(px_per_sec: f64) -> Self {
         let time_per_thumb = 80.0 / px_per_sec; // 80px thumb width
 
@@ -45,8 +49,10 @@ impl DensityLevel {
             DensityLevel::Low
         } else if time_per_thumb > 0.5 {
             DensityLevel::Medium
-        } else {
+        } else if time_per_thumb > 0.05 {
             DensityLevel::High
+        } else {
+            DensityLevel::Ultra
         }
     }
 
@@ -55,7 +61,8 @@ impl DensityLevel {
         match self {
             DensityLevel::Low => Some(DensityLevel::Medium),
             DensityLevel::Medium => Some(DensityLevel::High),
-            DensityLevel::High => None,
+            DensityLevel::High => Some(DensityLevel::Ultra),
+            DensityLevel::Ultra => None,
         }
     }
 }
@@ -187,6 +194,7 @@ impl VideoCache {
         levels.insert(DensityLevel::Low, DensityCache::new(video_id.clone(), DensityLevel::Low));
         levels.insert(DensityLevel::Medium, DensityCache::new(video_id.clone(), DensityLevel::Medium));
         levels.insert(DensityLevel::High, DensityCache::new(video_id.clone(), DensityLevel::High));
+        levels.insert(DensityLevel::Ultra, DensityCache::new(video_id.clone(), DensityLevel::Ultra));
 
         Self {
             video_id,
@@ -225,9 +233,14 @@ impl VideoCache {
         }
 
         // Try lower densities as fallback
-        // (search all lower levels)
-        for density in [DensityLevel::Medium, DensityLevel::Low] {
-            if density > target_density || target_density == density {
+        // (search all lower levels: High, Medium, Low - in that order)
+        let fallback_order = [
+            DensityLevel::High,
+            DensityLevel::Medium,
+            DensityLevel::Low,
+        ];
+        for density in fallback_order {
+            if density >= target_density {
                 continue;
             }
             if let Some(cache) = self.levels.get(&density) {
@@ -331,6 +344,7 @@ impl ThumbnailCache {
                 DensityLevel::Low => "low",
                 DensityLevel::Medium => "medium",
                 DensityLevel::High => "high",
+                DensityLevel::Ultra => "ultra",
             };
             let time_key = (time * 1000.0).round() as u64;
             dir.join(format!("{}_{}_{}.webp", video_id, density_name, time_key))
