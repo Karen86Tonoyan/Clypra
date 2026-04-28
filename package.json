@@ -1,7 +1,28 @@
 {
   "name": "clypra",
-  "private": true,
   "version": "0.1.0",
+  "description": "A modern, open-source video editor built with Tauri, React, and TypeScript",
+  "author": "Clypra Contributors",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/AIEraDev/clypra.git"
+  },
+  "bugs": {
+    "url": "https://github.com/AIEraDev/clypra/issues"
+  },
+  "homepage": "https://github.com/AIEraDev/clypra#readme",
+  "keywords": [
+    "video-editor",
+    "tauri",
+    "react",
+    "typescript",
+    "ffmpeg",
+    "video-editing",
+    "desktop-app",
+    "open-source"
+  ],
+  "private": true,
   "type": "module",
   "scripts": {
     "dev": "vite",
