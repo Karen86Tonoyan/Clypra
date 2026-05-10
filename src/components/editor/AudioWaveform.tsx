@@ -16,7 +16,7 @@ interface AudioWaveformProps {
 export const AudioWaveform: React.FC<AudioWaveformProps> = ({ audioElement, isPlaying, coverImage, audioName, className = "" }) => {
   const canvasLeftRef = useRef<HTMLCanvasElement>(null);
   const canvasRightRef = useRef<HTMLCanvasElement>(null);
-  const animationRef = useRef<number>();
+  const animationRef = useRef<number | undefined>(undefined);
   const analyserRef = useRef<AnalyserNode | null>(null);
   const dataArrayRef = useRef<Uint8Array | null>(null);
   const audioContextRef = useRef<AudioContext | null>(null);

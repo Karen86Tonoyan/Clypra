@@ -131,8 +131,7 @@ describe("fileBasename", () => {
   });
 
   it("should handle undefined (via default)", () => {
-    // @ts-expect-error Testing runtime behavior with undefined
-    expect(fileBasename(undefined)).toBe("clip");
+    expect(fileBasename(undefined as unknown as string)).toBe("clip");
   });
 
   it("should handle path with trailing separator", () => {

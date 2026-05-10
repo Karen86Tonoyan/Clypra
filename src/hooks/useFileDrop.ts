@@ -20,12 +20,13 @@ export const useFileDrop = ({ onDrop, enabled = true }: UseFileDropOptions) => {
     if (!enabled) return;
 
     let unlisten: (() => void) | undefined;
+    let isMounted = true;
 
     const setupListener = async () => {
       try {
         // Listen for file drop hover
         const unlistenHover = await listen<{ position: { x: number; y: number } }>("tauri://drag-over", (event) => {
-          if (!containerRef.current) return;
+          if (!containerRef.current || !isMounted) return;
 
           const rect = containerRef.current.getBoundingClientRect();
           const { x, y } = event.payload.position;
@@ -41,6 +42,8 @@ export const useFileDrop = ({ onDrop, enabled = true }: UseFileDropOptions) => {
           paths: string[];
           position: { x: number; y: number };
         }>("tauri://drag-drop", async (event) => {
+          if (!isMounted) return;
+
           setIsDraggingOver(false);
 
           if (!containerRef.current || isProcessingRef.current) {
@@ -65,14 +68,23 @@ export const useFileDrop = ({ onDrop, enabled = true }: UseFileDropOptions) => {
 
         // Listen for drag cancelled
         const unlistenCancel = await listen("tauri://drag-cancelled", () => {
+          if (!isMounted) return;
           setIsDraggingOver(false);
         });
 
-        unlisten = () => {
+        // Only set unlisten if component is still mounted
+        if (isMounted) {
+          unlisten = () => {
+            unlistenHover();
+            unlistenDrop();
+            unlistenCancel();
+          };
+        } else {
+          // Component unmounted before listeners were set up, clean up immediately
           unlistenHover();
           unlistenDrop();
           unlistenCancel();
-        };
+        }
       } catch (error) {
         console.error("[useFileDrop] Failed to setup file drop listener:", error);
       }
@@ -81,6 +93,7 @@ export const useFileDrop = ({ onDrop, enabled = true }: UseFileDropOptions) => {
     setupListener();
 
     return () => {
+      isMounted = false;
       if (unlisten) {
         unlisten();
       }

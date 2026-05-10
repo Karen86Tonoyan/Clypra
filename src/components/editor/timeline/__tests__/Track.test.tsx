@@ -24,7 +24,7 @@ describe("Track timeline behavior", () => {
     addClipFromAsset.mockClear();
     getMediaAsset.mockClear();
     useUIStore.setState({
-      selectedClipId: null,
+      selectedClipIds: [],
       selectedTrackId: null,
       previewMediaId: null,
       activePanel: "media",
@@ -56,6 +56,6 @@ describe("Track timeline behavior", () => {
     );
 
     fireEvent.click(screen.getByText("Clip A"));
-    expect(useUIStore.getState().selectedClipId).toBeNull();
+    expect(useUIStore.getState().selectedClipIds).toHaveLength(0);
   });
 });

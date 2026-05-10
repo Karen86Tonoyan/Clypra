@@ -29,7 +29,7 @@ export const EmptyTimelineDropZone: React.FC<EmptyTimelineDropZoneProps> = ({ is
 
   return (
     <div
-      ref={drop}
+      ref={drop as unknown as React.Ref<HTMLDivElement>}
       className={`w-full ${isDragging ? "flex-1 min-h-[120px]" : "h-0"} ${!isDragging ? "pointer-events-none" : ""}`}
       // No background — completely invisible unless hovering
     >

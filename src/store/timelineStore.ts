@@ -312,8 +312,8 @@ export const useTimelineStore = create<TimelineStore>((set, get) => ({
     if (track?.locked) return;
 
     // Clamp trimming to underlying media duration when available.
-    // Falls back to current trimOut (treating it as the media bound).
-    let mediaDurationBound = clip.trimOut;
+    // Falls back to Infinity (no cap) when the media asset cannot be resolved.
+    let mediaDurationBound = Infinity;
     try {
       // Lazy import to avoid circular deps during store init.
       // eslint-disable-next-line @typescript-eslint/no-var-requires
@@ -322,7 +322,7 @@ export const useTimelineStore = create<TimelineStore>((set, get) => ({
         mediaDurationBound = asset.duration;
       }
     } catch {
-      // ignore; keep fallback bound
+      // ignore; keep Infinity bound
     }
 
     const minDuration = 0.1;

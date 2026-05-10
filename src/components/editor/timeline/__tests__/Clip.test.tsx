@@ -4,7 +4,7 @@ import { DndProvider } from "react-dnd";
 import { HTML5Backend } from "react-dnd-html5-backend";
 import { Clip } from "../Clip";
 import { clearFilmstripFrameCache } from "../ClipFilmstrip";
-import type { Clip as ClipType, MediaAsset } from "../../../types";
+import type { Clip as ClipType, MediaAsset } from "@/types";
 
 const filmstripFrames = ["data:image/png;base64,frame0", "data:image/png;base64,frame1", "data:image/png;base64,frame2", "data:image/png;base64,frame3"];
 
@@ -128,7 +128,7 @@ describe("Clip Component", () => {
       expect(screen.getByText("00:02:05:00")).toBeInTheDocument();
     });
 
-    it("shows video filmstrip after debounced extraction", async () => {
+    it("shows video filmstrip canvas after rendering", async () => {
       vi.useFakeTimers();
       try {
         const clip = createMockClip();
@@ -136,7 +136,7 @@ describe("Clip Component", () => {
         renderClip(clip, mediaAsset);
         await act(async () => {});
 
-        // With a poster, the strip shows immediately (poster tiles) while streaming loads in the background.
+        // ClipFilmstrip now renders to a <canvas>, not <img> tiles.
         expect(screen.getByTestId("clip-filmstrip")).toBeInTheDocument();
 
         await act(async () => {
@@ -144,8 +144,9 @@ describe("Clip Component", () => {
         });
 
         expect(screen.getByTestId("clip-filmstrip")).toBeInTheDocument();
-        const imgs = screen.getByTestId("clip-filmstrip").querySelectorAll("img");
-        expect(imgs.length).toBeGreaterThanOrEqual(4);
+        // Canvas element is present (not img tags)
+        const canvas = screen.getByTestId("clip-filmstrip").querySelector("canvas");
+        expect(canvas).not.toBeNull();
       } finally {
         vi.useRealTimers();
       }

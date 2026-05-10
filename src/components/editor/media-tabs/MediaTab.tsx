@@ -244,7 +244,7 @@ const MediaCard: React.FC<MediaCardProps> = ({ asset, isSelected, isUsedInTimeli
   };
 
   return (
-    <div ref={drag} onClick={handleClick} onContextMenu={onContextMenu} className={`group relative bg-surface-raised rounded overflow-hidden transition-all cursor-pointer ${isDragging ? "opacity-50" : ""} ${isSelected ? "ring-1 ring-accent" : ""}`}>
+    <div ref={drag as unknown as React.Ref<HTMLDivElement>} onClick={handleClick} onContextMenu={onContextMenu} className={`group relative bg-surface-raised rounded overflow-hidden transition-all cursor-pointer ${isDragging ? "opacity-50" : ""} ${isSelected ? "ring-1 ring-accent" : ""}`}>
       <div className="aspect-video bg-surface-raised flex items-center justify-center relative">
         {asset.posterFrame && !/\.(mp4|mov|avi|mkv|webm|flv)(%|$)/i.test(asset.posterFrame) ? <img src={asset.posterFrame} alt={asset.name} className="w-full h-full object-contain" /> : <div className="w-8 h-8">{asset.type === "video" ? <Film className="w-full h-full text-text-muted" /> : asset.type === "audio" ? <Music className="w-full h-full text-text-muted" /> : <Image className="w-full h-full text-text-muted" />}</div>}
         {asset.duration > 0 && (

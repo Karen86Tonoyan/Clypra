@@ -9,18 +9,25 @@ import { useKeyboardShortcuts } from "../../hooks/useKeyboardShortcuts";
 import { usePlaybackStore } from "../../store/playbackStore";
 import { useProjectStore } from "../../store/projectStore";
 import { useUIStore } from "../../store/uiStore";
+import { useRenderEngineStore } from "../../store/renderEngineStore";
 
 export const EditorScreen: React.FC = () => {
   const { toastMessage } = useKeyboardShortcuts();
   const { setDuration } = usePlaybackStore();
   const { project } = useProjectStore();
   const { showSettingsModal, toggleSettingsModal } = useUIStore();
+  const { initRuntime, destroyRuntime } = useRenderEngineStore();
 
   useEffect(() => {
     if (project) {
       setDuration(project.duration);
+      initRuntime(project.id);
     }
-  }, [project, setDuration]);
+
+    return () => {
+      destroyRuntime();
+    };
+  }, [project, setDuration, initRuntime, destroyRuntime]);
 
   return (
     <DndProvider backend={HTML5Backend}>

@@ -1,4 +1,3 @@
-import React from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { render, screen } from "@testing-library/react";
 import { PreviewPanel } from "../PreviewPanel";
@@ -15,8 +14,8 @@ class MockResizeObserver {
   constructor(cb: ResizeObserverCallback) {
     this.cb = cb;
   }
-  observe() {}
-  disconnect() {}
+  observe() { }
+  disconnect() { }
   trigger() {
     this.cb([], this as unknown as ResizeObserver);
   }
@@ -70,7 +69,6 @@ describe("PreviewPanel timeline rendering", () => {
       currentTime: 2,
       duration: 20,
       frameRate: 30,
-      intervalId: null,
     });
   });
 

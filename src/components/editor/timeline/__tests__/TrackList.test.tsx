@@ -18,7 +18,7 @@ describe("TrackList interactions", () => {
       pixelsPerSecond: 100,
     });
     useUIStore.setState({
-      selectedClipId: null,
+      selectedClipIds: [],
       selectedTrackId: null,
       previewMediaId: null,
       activePanel: "media",

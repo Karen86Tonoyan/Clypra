@@ -1,3 +1,7 @@
+// Re-export new render engine types (non-breaking alongside existing DENSITY_CONFIGS)
+export type { SpatialTier, TemporalTier, VelocityState } from './renderEngine/types';
+export { VELOCITY_THRESHOLDS, classifyVelocity } from './renderEngine/types';
+
 import type { DragItem, Track, Clip, DensityConfig, DensityLevel } from "../types";
 import { useTimelineStore } from "../store/timelineStore";
 import { useProjectStore } from "../store/projectStore";

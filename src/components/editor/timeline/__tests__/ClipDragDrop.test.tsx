@@ -4,7 +4,7 @@ import { DndProvider } from "react-dnd";
 import { HTML5Backend } from "react-dnd-html5-backend";
 import { Track } from "../Track";
 import { Clip } from "../Clip";
-import type { Track as TrackType, Clip as ClipType, MediaAsset } from "../../../types";
+import type { Track as TrackType, Clip as ClipType, MediaAsset } from "@/types";
 
 // Mock stores and hooks
 const mockAddClipFromAsset = vi.fn();

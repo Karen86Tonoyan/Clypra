@@ -19,6 +19,10 @@
     ],
     "security": {
       "csp": null,
+      "headers": {
+        "Cross-Origin-Opener-Policy": "same-origin",
+        "Cross-Origin-Embedder-Policy": "require-corp"
+      },
       "assetProtocol": {
         "enable": true,
         "scope": {

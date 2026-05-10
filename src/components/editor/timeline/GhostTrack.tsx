@@ -25,7 +25,7 @@ export const GhostTrack: React.FC<GhostTrackProps> = ({ insertIndex, isDragging 
   );
 
   return (
-    <div ref={drop} className={`relative w-full transition-all duration-150 ${isDragging && canDrop && isOver ? "h-10" : "h-0"} ${!isDragging ? "pointer-events-none" : ""}`}>
+    <div ref={drop as unknown as React.Ref<HTMLDivElement>} className={`relative w-full transition-all duration-150 ${isDragging && canDrop && isOver ? "h-10" : "h-0"} ${!isDragging ? "pointer-events-none" : ""}`}>
       {/* Only show a horizontal insertion line when dragging and hovering */}
       {isDragging && isOver && canDrop && (
         <div className="absolute inset-x-0 top-1/2 -translate-y-1/2 h-0.5 bg-accent rounded-full pointer-events-none">

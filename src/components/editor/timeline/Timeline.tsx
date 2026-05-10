@@ -15,6 +15,7 @@ import { usePlayback } from "../../../hooks/usePlayback";
 // import { useTimelineAutoScroll } from "../../../hooks/useTimelineAutoScroll";
 import type { VideoMetadata } from "../../../types";
 import { createClipFromAsset } from "../../../lib/timelineClip";
+import { useRenderEngineStore } from "../../../store/renderEngineStore";
 
 const TIMELINE_MIN_PPS = 50;
 const TIMELINE_MAX_PPS = 500;
@@ -93,6 +94,22 @@ export const Timeline: React.FC = () => {
   const containerRef = useRef<HTMLDivElement>(null);
   const [isDraggingOver, setIsDraggingOver] = useState(false);
   const isProcessingDropRef = useRef(false);
+
+  // ── RenderRuntime event wiring ──────────────────────────────────────────────
+  const runtime = useRenderEngineStore((s) => s.runtime);
+
+  // Attach scroll/pointer listeners to the timeline scroll container
+  useEffect(() => {
+    const container = containerRef.current;
+    if (!runtime || !container) return;
+    return runtime.attach(container);
+  }, [runtime]); // re-attach if runtime changes (e.g. project switch)
+
+  // Notify runtime when zoom level (pixelsPerSecond) changes
+  useEffect(() => {
+    if (!runtime) return;
+    runtime.notifyZoom(pixelsPerSecond);
+  }, [runtime, pixelsPerSecond]);
 
   // Pointer-based drag state with gap engine
   const [dragState, setDragState] = useState<{

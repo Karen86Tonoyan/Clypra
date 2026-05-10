@@ -311,7 +311,90 @@ impl VideoDecoder {
         Ok((decoder, w, h))
     }
 
+    /// Decode a single frame at full display resolution (no thumbnail scaling).
+    ///
+    /// Used by the pyramid pipeline: decode once at full res → pass to
+    /// `downsample_pyramid()` which produces L0–L3 in parallel via LANCZOS.
+    ///
+    /// Returns raw RGBA bytes at `(display_w, display_h)` after SAR correction
+    /// and rotation. No downsampling is applied here.
+    pub fn decode_frame_full_res(
+        &mut self,
+        timestamp_secs: f64,
+    ) -> Result<(Vec<u8>, u32, u32), String> {
+        let ts = timestamp_secs.max(0.0).min(self.duration - 0.001);
+        let target_pts = (ts * self.time_base.1 as f64 / self.time_base.0 as f64) as i64;
+        let sequential_window = (2.0 * self.time_base.1 as f64 / self.time_base.0 as f64) as i64;
+        self.state.update_sequential(target_pts);
+
+        let needs_seek = self.state.current_pts < 0
+            || target_pts < self.state.current_pts
+            || !self.state.can_decode_forward(target_pts, sequential_window);
+
+        if needs_seek {
+            unsafe {
+                let ret = ffmpeg::ffi::av_seek_frame(
+                    self.input_ctx.as_mut_ptr(),
+                    self.stream_index as i32,
+                    target_pts,
+                    ffmpeg::ffi::AVSEEK_FLAG_BACKWARD as i32,
+                );
+                if ret < 0 { return Err(format!("Seek failed at {}s", ts)); }
+            }
+            self.decoder.flush();
+            self.state.current_pts = -1;
+            self.state.gop_start_pts = target_pts;
+        }
+
+        let mut best_frame = ffmpeg::frame::Video::empty();
+        let mut found = false;
+
+        'decode: for (stream, packet) in self.input_ctx.packets() {
+            if stream.index() != self.stream_index { continue; }
+            if self.decoder.send_packet(&packet).is_err() { continue; }
+            let mut frame = ffmpeg::frame::Video::empty();
+            while self.decoder.receive_frame(&mut frame).is_ok() {
+                let pts = frame.pts().unwrap_or(0);
+                self.state.current_pts = pts;
+                let frame_ts = pts as f64 * self.time_base.0 as f64 / self.time_base.1 as f64;
+                if frame_ts >= ts - (1.0 / 60.0) {
+                    best_frame = frame;
+                    found = true;
+                    break 'decode;
+                }
+                best_frame = frame;
+                frame = ffmpeg::frame::Video::empty();
+            }
+        }
+
+        if !found && best_frame.width() == 0 {
+            return Err(format!("No frame found at {}s", ts));
+        }
+
+        let cpu_frame = self.to_cpu_frame(best_frame)?;
+        let (display_w, display_h) = self.display_dimensions();
+
+        // Account for rotation when choosing scale target
+        let (scale_w, scale_h) = if self.rotation == 90 || self.rotation == 270 {
+            (display_h, display_w)
+        } else {
+            (display_w, display_h)
+        };
+
+        // Scale YUV → RGBA at display resolution (LANCZOS, no additional thumbnail scaling)
+        let scaled = self.scale_to_rgba_explicit(&cpu_frame, scale_w, scale_h)?;
+
+        let rgba = if self.rotation != 0 {
+            Self::rotate_rgba(&scaled, scale_w, scale_h, self.rotation)
+        } else {
+            scaled
+        };
+
+        Ok((rgba, display_w, display_h))
+    }
+
     /// Seek and decode a single frame. Optimized for sequential timeline scrubbing.
+
     pub fn decode_frame(
         &mut self,
         timestamp_secs: f64,
@@ -518,7 +601,7 @@ impl VideoDecoder {
             ffmpeg::format::Pixel::RGBA,
             out_w,
             out_h,
-            Flags::BILINEAR,
+            Flags::LANCZOS,
         ).map_err(|e| e.to_string())?;
 
         let mut out = ffmpeg::frame::Video::empty();
@@ -580,7 +663,7 @@ impl VideoDecoder {
             ffmpeg::format::Pixel::RGBA,
             dst_w,
             dst_h,
-            Flags::BILINEAR,
+            Flags::LANCZOS,
         ).map_err(|e| e.to_string())?;
         
         let mut dst_frame = ffmpeg::frame::Video::empty();
