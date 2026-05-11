@@ -1,0 +1,164 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+jobs:
+  create-release:
+    name: Create Release
+    runs-on: ubuntu-latest
+    outputs:
+      release_id: ${{ steps.create-release.outputs.result }}
+      release_upload_url: ${{ steps.create-release.outputs.upload_url }}
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Get version from tag
+        id: get_version
+        run: echo "VERSION=${GITHUB_REF#refs/tags/v}" >> $GITHUB_OUTPUT
+
+      - name: Create Release
+        id: create-release
+        uses: actions/create-release@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tag_name: ${{ github.ref }}
+          release_name: Clypra v${{ steps.get_version.outputs.VERSION }}
+          body: |
+            ## What's New in v${{ steps.get_version.outputs.VERSION }}
+
+            See [CHANGELOG.md](https://github.com/AIEraDev/Clypra/blob/master/CHANGELOG.md) for full details.
+
+            ## Downloads
+
+            Choose the right version for your platform:
+
+            - **macOS**: Download the `.dmg` file (works on both Intel and Apple Silicon)
+            - **Windows**: Download the `.msi` installer
+            - **Linux**: Download the `.AppImage` file
+
+            ## Installation
+
+            ### macOS
+            1. Download the `.dmg` file
+            2. Open it and drag Clypra to Applications
+            3. First time: Right-click → Open (to bypass Gatekeeper)
+
+            ### Windows
+            1. Download the `.msi` file
+            2. Run the installer
+            3. If SmartScreen appears, click "More info" → "Run anyway"
+
+            ### Linux
+            1. Download the `.AppImage` file
+            2. Make it executable: `chmod +x Clypra*.AppImage`
+            3. Run it: `./Clypra*.AppImage`
+          draft: true
+          prerelease: false
+
+  build-release:
+    name: Build ${{ matrix.platform }}
+    needs: create-release
+    permissions:
+      contents: write
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: macos-latest
+            target: universal-apple-darwin
+            args: "--target universal-apple-darwin"
+          - platform: windows-latest
+            target: x86_64-pc-windows-msvc
+            args: ""
+          - platform: ubuntu-22.04
+            target: x86_64-unknown-linux-gnu
+            args: ""
+
+    runs-on: ${{ matrix.platform }}
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.platform == 'macos-latest' && 'aarch64-apple-darwin,x86_64-apple-darwin' || '' }}
+
+      - name: Rust cache
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+
+      - name: Install FFmpeg (macOS)
+        if: matrix.platform == 'macos-latest'
+        run: |
+          brew install ffmpeg
+          echo "FFMPEG_DIR=$(brew --prefix ffmpeg)" >> $GITHUB_ENV
+
+      - name: Install FFmpeg (Linux)
+        if: matrix.platform == 'ubuntu-22.04'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libavcodec-dev \
+            libavformat-dev \
+            libavutil-dev \
+            libswscale-dev \
+            libswresample-dev \
+            pkg-config \
+            libwebkit2gtk-4.1-dev \
+            build-essential \
+            curl \
+            wget \
+            file \
+            libxdo-dev \
+            libssl-dev \
+            libayatana-appindicator3-dev \
+            librsvg2-dev
+
+      - name: Install FFmpeg (Windows)
+        if: matrix.platform == 'windows-latest'
+        run: |
+          # Install vcpkg
+          git clone https://github.com/Microsoft/vcpkg.git C:\vcpkg
+          cd C:\vcpkg
+          .\bootstrap-vcpkg.bat
+          .\vcpkg integrate install
+          .\vcpkg install ffmpeg:x64-windows-static-md
+          echo "FFMPEG_DIR=C:\vcpkg\installed\x64-windows-static-md" >> $env:GITHUB_ENV
+
+      - name: Install frontend dependencies
+        run: npm ci
+
+      - name: Build and release
+        uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # macOS signing (optional - add these secrets if you have them)
+          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        with:
+          releaseId: ${{ needs.create-release.outputs.release_id }}
+          args: ${{ matrix.args }}
