@@ -21,10 +21,23 @@ A modern, open-source video editor built with Tauri, React, and TypeScript featu
 - 📊 **Audio Visualization** - Real-time audio waveform display
 - 🎞️ **Filmstrip Preview** - Thumbnail strip for easy navigation
 - 🎯 **Professional Timeline** - Multi-track timeline with ruler and playhead
+- 📝 **Text Overlays** - Add titles and captions with custom fonts
+- 💾 **Project Management** - Save and load projects with auto-save
+- ↩️ **Undo/Redo** - 100 levels of undo/redo history
 - ⚡ **Fast Processing** - FFmpeg-powered video processing
 - 🖥️ **Native Performance** - Built with Tauri for desktop-class performance
 - 🎨 **Modern UI** - Clean, intuitive interface with dark mode
 - 🔄 **Cross-Platform** - Works on macOS, Windows, and Linux
+
+## Download
+
+| Platform                      | Download         |
+| ----------------------------- | ---------------- |
+| macOS (Apple Silicon + Intel) | [Coming Soon](#) |
+| Windows 10/11                 | [Coming Soon](#) |
+| Linux (AppImage)              | [Coming Soon](#) |
+
+**Current Status:** v0.1.0 in development. [See milestone →](https://github.com/AIEraDev/Clypra/milestone/1)
 
 ## Project Structure
 
@@ -145,6 +158,7 @@ _Coming soon - Add screenshots of your app in action_
 ### Global State Management (Zustand)
 
 Clypra relies on a powerful and scalable state architecture using **Zustand**. State is split into logical domains to minimize unnecessary re-renders while ensuring high performance:
+
 - **`timelineStore`**: Manages complex timeline manipulations (clips, tracks).
 - **`playbackStore`**: Highly optimized store for frame-accurate playback and playhead sync.
 - **`projectStore`**: Manages media assets, project settings, and history.
@@ -200,9 +214,11 @@ npm run lint
 
 ## Community
 
+- **Discord**: [Join our Discord](https://discord.gg/clypra) _(coming soon)_
 - **Issues**: [GitHub Issues](https://github.com/AIEraDev/clypra/issues)
 - **Discussions**: [GitHub Discussions](https://github.com/AIEraDev/clypra/discussions)
 - **Pull Requests**: [Contributing Guide](CONTRIBUTING.md)
+- **Sponsor**: [GitHub Sponsors](https://github.com/sponsors/AIEraDev) _(coming soon)_
 
 ## License
 
