@@ -36,3 +36,6 @@ export * from "./timeline";
 
 // Render (fallback strategies)
 export * from "./render";
+
+// Fonts (deterministic font loading)
+export * from "./fonts";

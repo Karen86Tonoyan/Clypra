@@ -19,6 +19,7 @@ import type { Clip, Track, MediaAsset, Project } from "../../types";
 import { evaluateSceneCached } from "../evaluation/evaluator";
 import { rasterizeScene } from "../render/rasterizer";
 import { getResourceManager } from "../resources/ResourceManager";
+import { getFontLoader } from "../fonts/FontLoader";
 
 /**
  * Frame job status.
@@ -194,8 +195,6 @@ export class FrameScheduler {
       job.cancelled = true;
       job.status = "cancelled";
       this.stats.cancelledJobs++;
-
-
     }
   }
 
@@ -345,6 +344,9 @@ export class FrameScheduler {
 
       // Pre-load resources for this frame
       await this.preloadResources(job);
+
+      // Pre-load fonts for text layers
+      await this.preloadFonts(job);
 
       job.metrics.resourceLoadTimeMs = Date.now() - resourceStartTime;
 
@@ -512,6 +514,42 @@ export class FrameScheduler {
 
     // Wait for all resources to load
     await Promise.all(loadPromises);
+  }
+
+  /**
+   * Pre-load fonts for text layers.
+   * Ensures deterministic font availability before rendering.
+   */
+  private async preloadFonts(job: FrameJob): Promise<void> {
+    // Evaluate scene to discover required fonts
+    const scene = evaluateSceneCached(job.request.time, this.clips, this.tracks, this.assets, this.project, this.epoch);
+
+    const fontLoader = getFontLoader();
+    const fontDescriptors = [];
+
+    // Collect all unique fonts from text layers
+    for (const layer of scene.visualLayers) {
+      if (layer.layerType === "text") {
+        fontDescriptors.push({
+          family: layer.fontFamily,
+          weight: layer.fontWeight,
+          style: layer.fontStyle,
+        });
+      }
+    }
+
+    // Load all fonts
+    if (fontDescriptors.length > 0) {
+      try {
+        await fontLoader.ensureFonts(fontDescriptors);
+        await fontLoader.waitForFontsReady();
+      } catch (error) {
+        // Log but don't fail - rasterizer will use fallback fonts
+        if (this.config.debug) {
+          console.warn("Failed to pre-load fonts:", error);
+        }
+      }
+    }
   }
 }
 

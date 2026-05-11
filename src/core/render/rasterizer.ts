@@ -175,7 +175,8 @@ async function rasterizeMediaLayer(ctx: CanvasRenderingContext2D | OffscreenCanv
     if (layer.mediaType === "video" && target.videoElements) {
       const key = `${layer.clipId}-${layer.mediaId}`;
       const video = target.videoElements.get(key);
-      if (video && video.readyState >= 2) { // HAVE_CURRENT_DATA
+      if (video && video.readyState >= 2) {
+        // HAVE_CURRENT_DATA
         ctx.drawImage(video, -width / 2, -height / 2, width, height);
         return;
       }
@@ -234,17 +235,21 @@ function rasterizeTextLayer(ctx: CanvasRenderingContext2D | OffscreenCanvasRende
 
   ctx.font = `${fontStyle} ${fontWeight} ${fontSize}px ${fontFamily}`;
   ctx.fillStyle = layer.color;
-  ctx.textAlign = layer.textAlign;
-  ctx.textBaseline = "middle";
 
-  // Split text into lines
-  const lines = layer.text.split("\n");
+  // Apply letter spacing if specified
+  if (layer.letterSpacing !== 0) {
+    ctx.letterSpacing = `${layer.letterSpacing * scaleX}px`;
+  }
+
+  // Split text into lines and wrap if needed
+  const lines = wrapText(ctx, layer.text, width, fontSize, layer.lineHeight);
   const lineHeight = fontSize * layer.lineHeight;
 
-  // Calculate vertical alignment offset
+  // Calculate total text height
   const totalHeight = lines.length * lineHeight;
-  let startY: number;
 
+  // Calculate vertical alignment offset
+  let startY: number;
   switch (layer.verticalAlign) {
     case "top":
       startY = -height / 2 + lineHeight / 2;
@@ -257,6 +262,10 @@ function rasterizeTextLayer(ctx: CanvasRenderingContext2D | OffscreenCanvasRende
       startY = -totalHeight / 2 + lineHeight / 2;
       break;
   }
+
+  // Set text alignment
+  ctx.textAlign = layer.textAlign;
+  ctx.textBaseline = "middle";
 
   // Calculate horizontal alignment offset
   let textX: number;
@@ -272,6 +281,12 @@ function rasterizeTextLayer(ctx: CanvasRenderingContext2D | OffscreenCanvasRende
       textX = 0;
       break;
   }
+
+  // Enable clipping to prevent text overflow
+  ctx.save();
+  ctx.beginPath();
+  ctx.rect(-width / 2, -height / 2, width, height);
+  ctx.clip();
 
   // Draw each line
   for (let i = 0; i < lines.length; i++) {
@@ -299,6 +314,64 @@ function rasterizeTextLayer(ctx: CanvasRenderingContext2D | OffscreenCanvasRende
     // Draw text fill
     ctx.fillText(line, textX, y);
   }
+
+  ctx.restore();
+
+  // Reset letter spacing
+  if (layer.letterSpacing !== 0) {
+    ctx.letterSpacing = "0px";
+  }
+}
+
+/**
+ * Wrap text to fit within a maximum width.
+ * Handles manual line breaks (\n) and automatic word wrapping.
+ */
+function wrapText(ctx: CanvasRenderingContext2D | OffscreenCanvasRenderingContext2D, text: string, maxWidth: number, fontSize: number, lineHeight: number): string[] {
+  const lines: string[] = [];
+
+  // Split by manual line breaks first
+  const paragraphs = text.split("\n");
+
+  for (const paragraph of paragraphs) {
+    if (paragraph.trim() === "") {
+      lines.push("");
+      continue;
+    }
+
+    // Measure paragraph width
+    const metrics = ctx.measureText(paragraph);
+
+    // If paragraph fits, add it as-is
+    if (metrics.width <= maxWidth) {
+      lines.push(paragraph);
+      continue;
+    }
+
+    // Wrap paragraph into multiple lines
+    const words = paragraph.split(" ");
+    let currentLine = "";
+
+    for (const word of words) {
+      const testLine = currentLine ? `${currentLine} ${word}` : word;
+      const testMetrics = ctx.measureText(testLine);
+
+      if (testMetrics.width > maxWidth && currentLine) {
+        // Line is too long, push current line and start new one
+        lines.push(currentLine);
+        currentLine = word;
+      } else {
+        currentLine = testLine;
+      }
+    }
+
+    // Push remaining text
+    if (currentLine) {
+      lines.push(currentLine);
+    }
+  }
+
+  return lines;
 }
 
 /**

@@ -107,11 +107,20 @@ export interface Clip {
 
 export interface TextClip extends Clip {
   text: string;
-  fontSize: number;
   fontFamily: string;
+  fontSize: number;
+  fontWeight?: string | number;
+  fontStyle?: "normal" | "italic";
   color: string;
-  bold: boolean;
-  italic: boolean;
+  backgroundColor?: string;
+  align: "left" | "center" | "right";
+  valign: "top" | "middle" | "bottom";
+  lineHeight: number;
+  letterSpacing?: number;
+  maxWidth?: number;
+  paddingX: number;
+  paddingY: number;
+  // Inherited from Clip: x, y, width, height, rotation, opacity
 }
 
 export type DragItem = { type: "MEDIA_ASSET"; asset: MediaAsset } | { type: "CLIP"; clip: Clip };

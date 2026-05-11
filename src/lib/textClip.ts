@@ -69,8 +69,14 @@ export function createTextClip(options: CreateTextClipOptions): TextClip {
     fontSize,
     fontFamily,
     color,
-    bold,
-    italic,
+    fontWeight: bold ? "bold" : "normal",
+    fontStyle: italic ? "italic" : "normal",
+    align: "center",
+    valign: "middle",
+    lineHeight: 1.2,
+    letterSpacing: 0,
+    paddingX: 16,
+    paddingY: 16,
   };
 }
 

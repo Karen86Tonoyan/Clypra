@@ -48,8 +48,14 @@ describe("Text Layer Evaluation", () => {
       fontSize: 48,
       fontFamily: "Inter",
       color: "#ffffff",
-      bold: true,
-      italic: false,
+      fontWeight: "bold",
+      fontStyle: "normal",
+      align: "center",
+      valign: "middle",
+      lineHeight: 1.2,
+      letterSpacing: 0,
+      paddingX: 16,
+      paddingY: 16,
     };
 
     const scene = evaluateScene(2.5, [textClip as any], tracks, [], project);
@@ -92,8 +98,14 @@ describe("Text Layer Evaluation", () => {
       fontSize: 48,
       fontFamily: "Inter",
       color: "#ffffff",
-      bold: false,
-      italic: false,
+      fontWeight: "normal",
+      fontStyle: "normal",
+      align: "center",
+      valign: "middle",
+      lineHeight: 1.2,
+      letterSpacing: 0,
+      paddingX: 16,
+      paddingY: 16,
     };
 
     // Time before clip starts
@@ -138,8 +150,14 @@ describe("Text Layer Evaluation", () => {
       fontSize: 48,
       fontFamily: "Inter",
       color: "#ffffff",
-      bold: false,
-      italic: false,
+      fontWeight: "normal",
+      fontStyle: "normal",
+      align: "center",
+      valign: "middle",
+      lineHeight: 1.2,
+      letterSpacing: 0,
+      paddingX: 16,
+      paddingY: 16,
     };
 
     const scene = evaluateScene(2, [textClip as any], [invisibleTrack], [], project);
@@ -201,8 +219,14 @@ describe("Text Layer Evaluation", () => {
       fontSize: 64,
       fontFamily: "Inter",
       color: "#ffffff",
-      bold: true,
-      italic: false,
+      fontWeight: "bold",
+      fontStyle: "normal",
+      align: "center",
+      valign: "middle",
+      lineHeight: 1.2,
+      letterSpacing: 0,
+      paddingX: 16,
+      paddingY: 16,
     };
 
     const assets: MediaAsset[] = [
@@ -250,8 +274,14 @@ describe("Text Layer Evaluation", () => {
       fontSize: 48,
       fontFamily: "Inter",
       color: "#ff0000",
-      bold: false,
-      italic: true,
+      fontWeight: "normal",
+      fontStyle: "italic",
+      align: "center",
+      valign: "middle",
+      lineHeight: 1.2,
+      letterSpacing: 0,
+      paddingX: 16,
+      paddingY: 16,
     };
 
     const scene = evaluateScene(2, [textClip as any], tracks, [], project);

@@ -117,12 +117,12 @@ export function evaluateScene(time: number, clips: Clip[], tracks: Track[], asse
         fontFamily: textClip.fontFamily || "Inter, system-ui, sans-serif",
         fontSize: textClip.fontSize || 48,
         color: textClip.color || "#ffffff",
-        fontWeight: textClip.bold ? "bold" : "normal",
-        fontStyle: textClip.italic ? "italic" : "normal",
-        textAlign: "center",
-        verticalAlign: "middle",
-        lineHeight: 1.2,
-        letterSpacing: 0,
+        fontWeight: (textClip.fontWeight || "normal") as "normal" | "bold" | number,
+        fontStyle: textClip.fontStyle || "normal",
+        textAlign: textClip.align || "center",
+        verticalAlign: textClip.valign || "middle",
+        lineHeight: textClip.lineHeight || 1.2,
+        letterSpacing: textClip.letterSpacing || 0,
       };
 
       visualLayers.push(textLayer);
