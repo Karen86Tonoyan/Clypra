@@ -293,6 +293,40 @@ export class FrameScheduler {
   }
 
   /**
+   * Dispose scheduler and release all resources.
+   * Cancels all pending jobs and clears state.
+   */
+  dispose(): void {
+    // Cancel all jobs
+    this.cancelAll();
+
+    // Clear all state
+    this.jobs.clear();
+    this.queue = [];
+    this.activeJobs.clear();
+
+    // Reset timeline state
+    this.clips = [];
+    this.tracks = [];
+    this.assets = [];
+    this.project = null;
+    this.epoch = 0;
+
+    // Reset telemetry
+    this.stats = {
+      totalJobs: 0,
+      completedJobs: 0,
+      cancelledJobs: 0,
+      failedJobs: 0,
+      totalEvaluationTimeMs: 0,
+      totalRasterTimeMs: 0,
+      totalTimeMs: 0,
+      cacheHits: 0,
+      cacheMisses: 0,
+    };
+  }
+
+  /**
    * Sort queue by priority.
    */
   private sortQueue(): void {

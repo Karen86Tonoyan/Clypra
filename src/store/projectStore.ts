@@ -70,8 +70,10 @@ export const useProjectStore = create<ProjectStore>((set, get) => ({
 
   loadProject: (project) => {
     // Dispose previous project runtime before loading new one
-    import("../core/runtime/ProjectRuntimeManager").then(({ disposeProjectRuntime }) => {
-      disposeProjectRuntime().catch((err: Error) => console.error("[LoadProject] Runtime disposal failed:", err));
+    import("../core/runtime/ProjectRuntimeManager").then(({ disposeProjectRuntime, initializeProjectRuntime }) => {
+      disposeProjectRuntime()
+        .then(() => initializeProjectRuntime(project.id))
+        .catch((err: Error) => console.error("[LoadProject] Runtime initialization failed:", err));
     });
 
     // Clear existing state first

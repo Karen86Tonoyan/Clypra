@@ -22,7 +22,7 @@
 
 import { useHistoryStore } from "../../store/historyStore";
 import { useTimelineStore } from "../../store/timelineStore";
-import { getPlaybackClock } from "../playback";
+import { getPlaybackClock } from "../../hooks/usePlaybackClock";
 import { useUIStore } from "../../store/uiStore";
 import { SplitClipCommand } from "../history/commands";
 import type { Clip } from "../../types";

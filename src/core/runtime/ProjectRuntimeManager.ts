@@ -1,212 +1,97 @@
 /**
  * Project Runtime Manager
  *
+ * Phase 2: Disposable ProjectSession architecture.
+ *
  * Centralized orchestration point for project-scoped runtime lifecycle.
- * Handles initialization, disposal, and switching of project runtime state.
+ * Now delegates to ProjectSession for explicit ownership boundaries.
  *
  * Architecture principle:
- * - Project owns runtime
- * - Runtime owns playback, caches, evaluation state
- * - Runtime dies when project dies
+ * - Project owns session
+ * - Session owns all runtime subsystems
+ * - Session dies atomically when project closes
  *
  * This prevents state leakage across project switches by enforcing
- * deterministic teardown order and ownership boundaries.
+ * deterministic teardown order and explicit ownership boundaries.
+ *
+ * Migration from Phase 1:
+ * - Phase 1: Manual reset functions (resetPlaybackClock, resetTimelineStore, etc.)
+ * - Phase 2: Disposable ProjectSession container (session.dispose())
  */
 
-import { getPlaybackClock } from "../playback/PlaybackClock";
-import { getFrameScheduler } from "../scheduler/FrameScheduler";
-
-/**
- * Reset playback clock to initial state.
- * Stops playback, resets time, clears audio context.
- */
-function resetPlaybackClock(): void {
-  const clock = getPlaybackClock();
-
-  // Stop playback (pauses and resets to 0)
-  clock.stop();
-
-  // Reset to default values
-  clock.setDuration(0);
-  clock.setSpeed(1.0);
-  clock.setFrameRate(30);
-
-  // Note: AudioContext is kept alive for reuse
-  // Full disposal would require clock.dispose() but that's Phase 2
-}
-
-/**
- * Reset timeline store to initial state.
- * Clears tracks, clips, selections, and view state.
- */
-async function resetTimelineStore(): Promise<void> {
-  const { useTimelineStore } = await import("../../store/timelineStore");
-  const { TIMELINE_ZOOM_DEFAULT, TIMELINE_PPS_PER_ZOOM } = await import("../../lib/timelineZoom");
-
-  useTimelineStore.setState({
-    tracks: [],
-    clips: [],
-    mainVideoTrackId: null,
-    epoch: 0,
-    zoomLevel: TIMELINE_ZOOM_DEFAULT,
-    scrollLeft: 0,
-    pixelsPerSecond: TIMELINE_ZOOM_DEFAULT * TIMELINE_PPS_PER_ZOOM,
-    rippleEditEnabled: false,
-  });
-}
-
-/**
- * Reset UI store to initial state.
- * Clears selections, preview mode, and UI flags.
- */
-async function resetUIStore(): Promise<void> {
-  const { useUIStore } = await import("../../store/uiStore");
-
-  useUIStore.setState({
-    selectedClipIds: [],
-    selectedTrackId: null,
-    previewMode: "program",
-    // Note: Other UI flags are managed by components and reset naturally on unmount
-  });
-}
-
-/**
- * Reset render engine state.
- * Clears frame caches, cancels pending jobs, invalidates evaluation cache.
- */
-function resetRenderEngine(): void {
-  const scheduler = getFrameScheduler();
-
-  // Cancel all pending jobs
-  scheduler.cancelAll();
-
-  // Note: clearCache() method doesn't exist yet on FrameScheduler
-  // This is Phase 2 work - explicit cache management
-  // Currently caches are invalidated via epoch changes
-
-  // Note: Video element cleanup happens in PreviewPanel unmount
-  // Full resource disposal would require explicit video ref cleanup (Phase 2)
-}
-
-/**
- * Clear evaluation caches.
- * Invalidates scene evaluation cache tied to previous project.
- */
-async function clearEvaluationCaches(): Promise<void> {
-  // Evaluation cache is tied to epoch in timelineStore
-  // Resetting epoch to 0 invalidates all cached evaluations
-  // This is handled by resetTimelineStore()
-  // Future: If we add separate evaluation cache, clear it here
-}
-
-/**
- * Release video and audio resources.
- * Pauses videos, releases audio nodes, clears media element references.
- */
-function releaseMediaResources(): void {
-  // Video elements are managed by PreviewPanel component
-  // They will be cleaned up when component unmounts
-  // Future Phase 2: Explicit video ref registry for deterministic cleanup
-  // Future Phase 2: Audio graph disposal
-  // Future Phase 2: Decoder pool cleanup
-}
-
-/**
- * Cancel async background tasks.
- * Stops thumbnail generation, waveform analysis, and other background work.
- */
-function cancelAsyncTasks(): void {
-  // Future: Cancel thumbnail generation workers
-  // Future: Cancel waveform analysis
-  // Future: Cancel frame extraction jobs
-  // Future: Cancel decoder workers
-  // Currently these are handled implicitly by component unmounts
-  // Phase 2 would make this explicit
-}
+import { createProjectSession, disposeActiveSession, getActiveSession, getActiveSessionOrNull } from "./ProjectSession";
 
 /**
  * Initialize project runtime.
- * Sets up playback, render engine, and evaluation state for new project.
+ * Creates and activates new ProjectSession for the project.
+ *
+ * Phase 2: Delegates to ProjectSession.
  */
-export async function initializeProjectRuntime(): Promise<void> {
-  // Playback clock is lazy-initialized on first use
-  // Render engine is lazy-initialized on first use
-
-  // Reset stores to clean state
-  await resetTimelineStore();
-  await resetUIStore();
-
-  // Future Phase 2: Explicit runtime initialization
-  // - Create ProjectSession instance
-  // - Initialize owned subsystems
-  // - Attach to project lifecycle
+export async function initializeProjectRuntime(projectId: string): Promise<void> {
+  console.log(`[ProjectRuntimeManager] Initializing runtime for project: ${projectId}`);
+  await createProjectSession(projectId);
 }
 
 /**
  * Dispose project runtime.
- * Tears down all project-scoped state in deterministic order.
+ * Disposes active ProjectSession and all owned subsystems.
  *
- * Teardown order (critical for avoiding race conditions):
- * 1. Cancel async tasks (prevent new work)
- * 2. Stop playback (prevent time updates)
- * 3. Clear render engine (cancel pending frames)
- * 4. Release media resources (close decoders, release memory)
- * 5. Clear evaluation caches (invalidate computed state)
- * 6. Reset stores (clear UI state)
+ * Phase 2: Delegates to ProjectSession.
+ * Session handles deterministic teardown order internally.
  */
 export async function disposeProjectRuntime(): Promise<void> {
-  // 1. Cancel async background tasks
-  cancelAsyncTasks();
-
-  // 2. Stop playback immediately
-  resetPlaybackClock();
-
-  // 3. Clear render engine (cancel pending jobs, clear caches)
-  resetRenderEngine();
-
-  // 4. Release media resources
-  releaseMediaResources();
-
-  // 5. Clear evaluation caches
-  await clearEvaluationCaches();
-
-  // 6. Reset stores (UI state, timeline state)
-  await resetTimelineStore();
-  await resetUIStore();
+  const session = getActiveSessionOrNull();
+  if (session) {
+    console.log(`[ProjectRuntimeManager] Disposing runtime for project: ${session.projectId}`);
+    await disposeActiveSession();
+  } else {
+    console.log(`[ProjectRuntimeManager] No active session to dispose`);
+  }
 }
 
 /**
  * Switch project runtime.
- * Disposes current project runtime and initializes new one.
+ * Disposes current session and creates new one.
  *
- * This is the single orchestration point for project switches.
- * Ensures deterministic teardown → bootup sequence.
+ * Phase 2: Atomic session switch.
  */
-export async function switchProjectRuntime(): Promise<void> {
-  // Dispose current project runtime
+export async function switchProjectRuntime(newProjectId: string): Promise<void> {
+  console.log(`[ProjectRuntimeManager] Switching to project: ${newProjectId}`);
   await disposeProjectRuntime();
+  await initializeProjectRuntime(newProjectId);
+}
 
-  // Initialize new project runtime
-  await initializeProjectRuntime();
+/**
+ * Get active project session.
+ * Throws if no session is active.
+ */
+export function getProjectSession() {
+  return getActiveSession();
 }
 
 /**
  * Get runtime health status (for debugging).
- * Reports on leaked state, pending jobs, and resource usage.
+ * Reports on session state, leaked resources, and subsystem health.
  */
-export function getRuntimeHealthStatus(): {
-  playbackState: string;
-  pendingJobs: number;
-  cacheSize: number;
-  epoch: number;
-} {
-  const clock = getPlaybackClock();
-  const scheduler = getFrameScheduler();
+export function getRuntimeHealthStatus() {
+  const session = getActiveSessionOrNull();
+  if (!session) {
+    return {
+      hasActiveSession: false,
+      sessionId: null,
+      projectId: null,
+      state: null,
+      playbackState: null,
+      pendingJobs: 0,
+      videoElements: 0,
+      asyncTasks: 0,
+      rafLoops: 0,
+    };
+  }
 
+  const health = session.getHealthStatus();
   return {
-    playbackState: clock.state,
-    pendingJobs: scheduler.getStats().active,
-    cacheSize: scheduler.getStats().cacheHitRate,
-    epoch: 0, // Would read from timelineStore
+    hasActiveSession: true,
+    ...health,
   };
 }

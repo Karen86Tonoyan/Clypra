@@ -7,6 +7,7 @@ import { useTimelineStore } from "../../store/timelineStore";
 import { useUIStore } from "../../store/uiStore";
 import { evaluateSceneCached } from "../../core/evaluation/evaluator";
 import { getFrameScheduler } from "../../core/scheduler/FrameScheduler";
+import { getActiveSessionOrNull } from "../../core/runtime/ProjectSession";
 import { SourcePreview } from "./SourcePreview";
 import { cn } from "../../lib/utils";
 import type { EvaluatedMediaLayer } from "../../core/evaluation/types";
@@ -401,9 +402,20 @@ const ProgramPreview: React.FC = () => {
   // Video sync - EVENT DRIVEN (only on state changes, not every frame)
   useEffect(() => {
     const currentClockTime = clock.time;
+    const session = getActiveSessionOrNull();
 
     Object.values(videoRefs.current).forEach((video) => {
       if (!video) return;
+
+      // Register video element with session for lifecycle management
+      if (session && session.state === "active") {
+        const clipId = video.dataset.clipId;
+        const mediaId = video.dataset.mediaId;
+        if (clipId && mediaId) {
+          const key = `${clipId}-${mediaId}`;
+          session.registerVideoElement(key, video);
+        }
+      }
 
       // Audio settings
       video.muted = isMuted || volume === 0;
@@ -446,6 +458,21 @@ const ProgramPreview: React.FC = () => {
         }
       }
     });
+
+    // Cleanup: unregister video elements when effect cleans up
+    return () => {
+      if (session && session.state === "active") {
+        Object.values(videoRefs.current).forEach((video) => {
+          if (!video) return;
+          const clipId = video.dataset.clipId;
+          const mediaId = video.dataset.mediaId;
+          if (clipId && mediaId) {
+            const key = `${clipId}-${mediaId}`;
+            session.unregisterVideoElement(key);
+          }
+        });
+      }
+    };
   }, [clockState.state, isMuted, volume, clockState.speed, clips, clock, previewVideoReadyTick, scene.metadata.activeMediaHash]);
 
   // Periodic drift correction (low frequency, not every frame)

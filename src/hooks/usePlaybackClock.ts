@@ -4,6 +4,9 @@
  * Provides UI snapshots of playback state (throttled to 10fps).
  * For render loops, read clock.time imperatively instead.
  *
+ * Phase 2: Uses session-owned playback clock when available,
+ * falls back to global singleton for backward compatibility.
+ *
  * Usage:
  *   // For UI (timecode display, scrubber position)
  *   const { time, state } = usePlaybackClock();
@@ -18,15 +21,29 @@
 
 import { useEffect, useState, useMemo } from "react";
 import { getPlaybackClock, type PlaybackClockState } from "../core/playback";
+import { getActiveSessionOrNull } from "../core/runtime/ProjectSession";
+
+/**
+ * Get playback clock (session-aware).
+ * Uses session-owned clock when available, falls back to global singleton.
+ */
+function getSessionAwarePlaybackClock() {
+  const session = getActiveSessionOrNull();
+  if (session && session.state === "active") {
+    return session.playback;
+  }
+  // Fallback to global singleton for backward compatibility
+  return getPlaybackClock();
+}
 
 /**
  * Hook for UI snapshots of playback state.
  * Updates are throttled to 10fps to avoid React render storms.
  *
- * For high-frequency reads (render loops), use getPlaybackClock() directly.
+ * For high-frequency reads (render loops), use getSessionAwarePlaybackClock() directly.
  */
 export function usePlaybackClock(): PlaybackClockState {
-  const clock = getPlaybackClock();
+  const clock = getSessionAwarePlaybackClock();
   const [state, setState] = useState<PlaybackClockState>(clock.getState());
 
   useEffect(() => {
@@ -47,7 +64,7 @@ export function usePlaybackClock(): PlaybackClockState {
  * Functions are memoized to prevent unnecessary re-renders.
  */
 export function usePlaybackControls() {
-  const clock = getPlaybackClock();
+  const clock = getSessionAwarePlaybackClock();
 
   return useMemo(
     () => ({
@@ -62,6 +79,12 @@ export function usePlaybackControls() {
     [clock],
   );
 }
+
+/**
+ * Get playback clock for imperative reads (session-aware).
+ * Exported for backward compatibility and render loops.
+ */
+export { getSessionAwarePlaybackClock as getPlaybackClock };
 
 /**
  * Format time as timecode.
