@@ -616,7 +616,7 @@ export const Timeline: React.FC = () => {
     const MIN_TIMELINE_DURATION = 10;
     const timelineDuration = Math.max(contentEnd, MIN_TIMELINE_DURATION);
     setDuration(timelineDuration);
-  }, [clips, getTimelineEndTime, setDuration]);
+  }, [clips]);
 
   // ✅ CRITICAL: Clamp playhead if it's now beyond valid timeline bounds
   // This handles the case where:

@@ -8,11 +8,11 @@
  * Phase 2 Architecture: Explicit ownership boundaries.
  *
  * Key principles:
- * - Session owns runtime resources (clock, scheduler, decoders, GPU contexts)
+ * - Session references global singletons (clock, scheduler) for single-instance consistency
  * - Session CONSUMES timeline state, never mutates it
  * - Session resets ephemeral UI state (selections) on init/dispose
- * - Disposal is atomic and deterministic
- * - No global singletons (except session registry)
+ * - Disposal is atomic and deterministic (stops playback, cancels jobs, releases refs)
+ * - Actual singleton destruction handled by destroyRuntime()
  *
  * Responsibilities:
  * - Own playback clock (transport state)
@@ -45,8 +45,8 @@
  * - Ghost state bugs (runtime silently mutating domain state)
  */
 
-import { PlaybackClock } from "../playback/PlaybackClock";
-import { FrameScheduler } from "../scheduler/FrameScheduler";
+import { getPlaybackClock, PlaybackClock } from "../playback/PlaybackClock";
+import { getFrameScheduler, FrameScheduler } from "../scheduler/FrameScheduler";
 
 /**
  * Project Session State
@@ -142,19 +142,15 @@ export class ProjectSession {
     }
 
     try {
-      
-
-      // Create owned subsystems
-      this._playback = new PlaybackClock();
-      this._scheduler = new FrameScheduler();
+      // Use global singletons (single clock/scheduler ensures no divergence)
+      this._playback = getPlaybackClock();
+      this._scheduler = getFrameScheduler();
 
       // Initialize stores (timeline, UI)
       await this._initializeStores();
 
       this._state = "active";
       this._notifyListeners({ type: "initialized", session: this });
-
-      
     } catch (error) {
       this._state = "disposed";
       this._notifyListeners({ type: "error", session: this, error: error as Error });
@@ -181,7 +177,6 @@ export class ProjectSession {
     }
 
     this._state = "disposing";
-    
 
     try {
       // Deterministic teardown order (critical for avoiding race conditions)
@@ -205,24 +200,15 @@ export class ProjectSession {
       // 5. Cancel all RAF loops
       this._cancelRAFLoops();
 
-      // 6. Dispose owned subsystems
-      if (this._playback) {
-        this._playback.dispose();
-        this._playback = null;
-      }
-
-      if (this._scheduler) {
-        this._scheduler.dispose();
-        this._scheduler = null;
-      }
+      // 6. Release references to global singletons (actual disposal handled by destroyRuntime)
+      this._playback = null;
+      this._scheduler = null;
 
       // 7. Reset stores
       await this._resetStores();
 
       this._state = "disposed";
       this._notifyListeners({ type: "disposed", session: this });
-
-      
     } catch (error) {
       console.error(`[ProjectSession] Disposal error:`, error);
       this._state = "disposed"; // Mark as disposed even on error
@@ -391,7 +377,6 @@ class SessionRegistry {
    */
   async setActiveSession(session: ProjectSession | null): Promise<void> {
     if (this._activeSession && this._activeSession !== session) {
-      
       await this._activeSession.dispose();
     }
     this._activeSession = session;

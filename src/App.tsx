@@ -1,10 +1,10 @@
 import { useState, useEffect } from "react";
-import { LaunchScreen } from "./components/screens/LaunchScreen";
-import { EditorScreen } from "./components/screens/EditorScreen";
-import { TooltipProvider } from "./components/ui/Tooltip";
-import { useProjectStore } from "./store/projectStore";
-import { useUIStore } from "./store/uiStore";
-import type { Project, AspectRatio, MediaAsset } from "./types";
+import { LaunchScreen } from "@/components/screens/LaunchScreen";
+import { EditorScreen } from "@/components/screens/EditorScreen";
+import { TooltipProvider } from "@/components/ui/Tooltip";
+import { useProjectStore } from "@/store/projectStore";
+import { useUIStore } from "@/store/uiStore";
+import type { Project, AspectRatio, MediaAsset } from "@/types";
 
 const isExternalOrDataUrl = (value: string) => value.startsWith("data:") || value.startsWith("http") || value.startsWith("asset://");
 
@@ -97,8 +97,6 @@ const App = () => {
       const tracksPayload = Array.isArray(fullProjectData.tracks) ? fullProjectData.tracks : [];
       const clipsPayload = Array.isArray(fullProjectData.clips) ? fullProjectData.clips : [];
 
-      
-
       // Load project and atomically restore timeline and assets via projectStore.loadProject
       await loadProject(project, { mediaAssets: mediaAssetsPayload, tracks: tracksPayload, clips: clipsPayload });
 
@@ -106,11 +104,8 @@ const App = () => {
       setTimeout(async () => {
         const { useTimelineStore } = await import("./store/timelineStore");
         const timelineState = useTimelineStore.getState();
-        
       }, 200);
-    } catch (error) {
-      
-    }
+    } catch (error) {}
   };
 
   if (isLoading) {

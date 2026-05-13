@@ -337,6 +337,11 @@ export class RenderRuntime {
   teardown(): void {
     this._ismUnsubscribe?.();
     this._ism.detach();
+    // Unregister all clip epochs and cancel their jobs before disposing
+    for (const clipId of this._clipStates.keys()) {
+      this._scheduler.cancelClip(clipId);
+      unregisterActiveEpoch(clipId);
+    }
     this._scheduler.dispose();
     this._clipStates.clear();
   }

@@ -24,8 +24,7 @@ export const TimelineToolbar: React.FC = () => {
   // Split mode hook
   useSplitMode({
     enabled: splitMode,
-    onSplit: (clipId, time) => {
-    },
+    onSplit: (clipId, time) => {},
     onMessage: (message) => {
       setToastMessage(message);
       setTimeout(() => setToastMessage(null), 2000);
@@ -168,7 +167,7 @@ export const TimelineToolbar: React.FC = () => {
 
         <div className="ml-auto flex items-center gap-2">
           <span className="inline-flex items-center gap-1">
-            <Button title="Zoom Out" variant="ghost" size="icon-sm" className={zoomButton} onClick={() => setZoom(clampTimelineZoom(zoomLevel - TIMELINE_ZOOM_STEP))} aria-label="Zoom out timeline">
+            <Button title="Zoom Out" variant="ghost" size="icon-sm" className={zoomButton} onClick={() => setZoom(clampTimelineZoom(zoomLevel - TIMELINE_ZOOM_STEP))} disabled={zoomLevel <= TIMELINE_ZOOM_MIN} aria-label="Zoom out timeline">
               <ZoomOut className="w-2 h-2" strokeWidth={2} />
             </Button>
 
@@ -182,7 +181,7 @@ export const TimelineToolbar: React.FC = () => {
               <div data-testid="timeline-zoom-thumb" className="absolute top-1/2 h-[15px] w-[15px] -translate-x-1/2 -translate-y-1/2 rounded-full border-3 border-accent bg-surface" style={{ left: `${zoomThumbLeftPx}px` }} />
             </div>
 
-            <Button title="Zoom In" variant="ghost" size="icon-sm" className={zoomButton} onClick={() => setZoom(clampTimelineZoom(zoomLevel + TIMELINE_ZOOM_STEP))} aria-label="Zoom in timeline">
+            <Button title="Zoom In" variant="ghost" size="icon-sm" className={zoomButton} onClick={() => setZoom(clampTimelineZoom(zoomLevel + TIMELINE_ZOOM_STEP))} disabled={zoomLevel >= TIMELINE_ZOOM_MAX} aria-label="Zoom in timeline">
               <ZoomIn className="w-4 h-4" strokeWidth={2} />
             </Button>
           </span>

@@ -54,7 +54,6 @@ export function GPUPreview({ videoPath, currentTime, isPlaying, width, height, d
   useEffect(() => {
     // Wait for canvas to be mounted
     if (!canvasRef.current) {
-      console.warn("[GPUPreview] Canvas ref not available yet, will retry on next render");
       return;
     }
 

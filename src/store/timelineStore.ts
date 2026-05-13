@@ -22,11 +22,11 @@
  */
 
 import { create } from "zustand";
-import type { Track, Clip } from "../types";
+import type { Track, Clip } from "@/types";
 import { useUIStore } from "./uiStore";
 import { useProjectStore } from "./projectStore";
-import { clampTimelinePixelsPerSecond, clampTimelineZoom, TIMELINE_PPS_PER_ZOOM, TIMELINE_ZOOM_DEFAULT } from "../lib/timelineZoom";
-import { getTimelineContentEnd } from "../lib/timelineClip";
+import { clampTimelinePixelsPerSecond, clampTimelineZoom, TIMELINE_PPS_PER_ZOOM, TIMELINE_ZOOM_DEFAULT } from "@/lib/timelineZoom";
+import { getTimelineContentEnd } from "@/lib/timelineClip";
 import { autoSaveMiddleware } from "./middleware/autoSaveMiddleware";
 
 interface TimelineStore {

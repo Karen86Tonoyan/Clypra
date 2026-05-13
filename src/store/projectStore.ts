@@ -24,9 +24,9 @@
  */
 
 import { create } from "zustand";
-import type { Project, MediaAsset } from "../types";
+import type { Project, MediaAsset } from "@/types";
 import { useSettingsStore } from "./settingsStore";
-import { TIMELINE_PPS_PER_ZOOM, TIMELINE_ZOOM_DEFAULT } from "../lib/timelineZoom";
+import { TIMELINE_PPS_PER_ZOOM, TIMELINE_ZOOM_DEFAULT } from "@/lib/timelineZoom";
 
 interface ProjectStore {
   project: Project | null;

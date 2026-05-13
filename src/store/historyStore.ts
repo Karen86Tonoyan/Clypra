@@ -31,8 +31,8 @@
  */
 
 import { create } from "zustand";
-import { HistoryManager } from "../core/history";
-import type { Command, HistoryState } from "../core/history";
+import { HistoryManager } from "@/core/history";
+import type { Command, HistoryState } from "@/core/history";
 import { useTimelineStore } from "./timelineStore";
 import { useProjectStore } from "./projectStore";
 

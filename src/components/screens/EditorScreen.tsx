@@ -2,13 +2,14 @@ import React, { useEffect } from "react";
 // @ts-ignore - react-dnd types issue
 import { DndProvider } from "react-dnd";
 import { HTML5Backend } from "react-dnd-html5-backend";
-import { EditorLayout } from "../editor/EditorLayout";
-import { SettingsModal } from "../ui/SettingsModal";
-import { SuccessToast } from "../ui/SuccessToast";
-import { usePlaybackControls } from "../../hooks/usePlaybackClock";
-import { useProjectStore } from "../../store/projectStore";
-import { useUIStore } from "../../store/uiStore";
-import { useRenderEngineStore } from "../../store/renderEngineStore";
+import { EditorLayout } from "@/components/editor/EditorLayout";
+import { SettingsModal } from "@/components/ui/SettingsModal";
+import { SuccessToast } from "@/components/ui/SuccessToast";
+import { ErrorBoundary } from "@/components/ErrorBoundary";
+import { usePlaybackControls } from "@/hooks/usePlaybackClock";
+import { useProjectStore } from "@/store/projectStore";
+import { useUIStore } from "@/store/uiStore";
+import { useRenderEngineStore } from "@/store/renderEngineStore";
 
 export const EditorScreen: React.FC = () => {
   const toastMessage = useProjectStore((s) => s.toastMessage);
@@ -27,15 +28,17 @@ export const EditorScreen: React.FC = () => {
     return () => {
       destroyRuntime();
     };
-  }, [projectId, projectDuration, setDuration, initRuntime, destroyRuntime]);
+  }, [projectId, projectDuration]);
 
   return (
-    <DndProvider backend={HTML5Backend}>
-      <div className="w-full h-full p-1.5 overflow-hidden">
-        <EditorLayout />
-        <SettingsModal isOpen={showSettingsModal} onClose={toggleSettingsModal} />
-        <SuccessToast message={toastMessage} />
-      </div>
-    </DndProvider>
+    <ErrorBoundary>
+      <DndProvider backend={HTML5Backend}>
+        <div className="w-full h-full p-1.5 overflow-hidden">
+          <EditorLayout />
+          <SettingsModal isOpen={showSettingsModal} onClose={toggleSettingsModal} />
+          <SuccessToast message={toastMessage} />
+        </div>
+      </DndProvider>
+    </ErrorBoundary>
   );
 };

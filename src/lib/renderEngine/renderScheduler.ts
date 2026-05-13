@@ -13,7 +13,7 @@
  *   - preloadInterferenceFlag → priority demotion
  */
 
-import { Priority, type RenderJob, type IdleTask } from './types';
+import { Priority, type RenderJob, type IdleTask } from "./types";
 
 // ─── GPU Upload Throttle ──────────────────────────────────────────────────────
 
@@ -26,8 +26,8 @@ export class RenderScheduler {
   // Priority queues: Critical (0), High (1), Normal (2)
   private _queues: Map<Priority, RenderJob[]> = new Map([
     [Priority.Critical, []],
-    [Priority.High,     []],
-    [Priority.Normal,   []],
+    [Priority.High, []],
+    [Priority.Normal, []],
   ]);
 
   private _idleTasks: IdleTask[] = [];
@@ -44,7 +44,7 @@ export class RenderScheduler {
   }
 
   private _scheduleFrameReset(): void {
-    if (typeof requestAnimationFrame !== 'undefined') {
+    if (typeof requestAnimationFrame !== "undefined") {
       requestAnimationFrame(() => {
         this._uploadedThisFrame = 0;
         // Flush any waiters that were blocked by budget
@@ -61,7 +61,7 @@ export class RenderScheduler {
     if (this._suspended) return;
     const queue = this._queues.get(job.priority)!;
     // Deduplicate by jobId
-    if (!queue.some(j => j.jobId === job.jobId)) {
+    if (!queue.some((j) => j.jobId === job.jobId)) {
       queue.push(job);
     }
   }
@@ -86,7 +86,7 @@ export class RenderScheduler {
     let cancelled = 0;
     for (const queue of this._queues.values()) {
       const before = queue.length;
-      const remaining = queue.filter(j => !predicate(j));
+      const remaining = queue.filter((j) => !predicate(j));
       queue.length = 0;
       queue.push(...remaining);
       cancelled += before - queue.length;
@@ -96,7 +96,7 @@ export class RenderScheduler {
 
   /** R18: Clip removed → cancel all in-progress extractions immediately. */
   cancelClip(clipId: string): number {
-    return this.cancel(j => j.clipId === clipId);
+    return this.cancel((j) => j.clipId === clipId);
   }
 
   /** R18: Trim changed → cancel all tier extractions for that clip. */
@@ -105,11 +105,8 @@ export class RenderScheduler {
   }
 
   /** R18: Tier inactive >5s → cancel in-progress extractions for that tier. */
-  cancelInactiveTier(
-    clipId: string,
-    tier: import('./types').SpatialTier,
-  ): number {
-    return this.cancel(j => j.clipId === clipId && j.spatialTier === tier);
+  cancelInactiveTier(clipId: string, tier: import("./types").SpatialTier): number {
+    return this.cancel((j) => j.clipId === clipId && j.spatialTier === tier);
   }
 
   pendingCount(): number {
@@ -120,7 +117,7 @@ export class RenderScheduler {
 
   hasPending(clipId: string): boolean {
     for (const queue of this._queues.values()) {
-      if (queue.some(j => j.clipId === clipId)) return true;
+      if (queue.some((j) => j.clipId === clipId)) return true;
     }
     return false;
   }
@@ -140,7 +137,7 @@ export class RenderScheduler {
     }
 
     // Otherwise wait for the next frame reset
-    await new Promise<void>(resolve => {
+    await new Promise<void>((resolve) => {
       this._uploadWaiters.push(resolve);
     });
     this._uploadedThisFrame += bytes;
@@ -153,13 +150,13 @@ export class RenderScheduler {
   /** Schedule a task to run after 500ms of idle (R10). */
   scheduleIdle(task: IdleTask): void {
     // Deduplicate by task id
-    if (this._idleTasks.some(t => t.id === task.id)) return;
+    if (this._idleTasks.some((t) => t.id === task.id)) return;
     this._idleTasks.push(task);
     this._armIdleTimer();
   }
 
   cancelIdle(taskId: string): void {
-    this._idleTasks = this._idleTasks.filter(t => t.id !== taskId);
+    this._idleTasks = this._idleTasks.filter((t) => t.id !== taskId);
   }
 
   /** Call this whenever user interaction occurs to reset the idle timer (R10). */
@@ -190,7 +187,7 @@ export class RenderScheduler {
       try {
         await sorted[index].execute();
       } catch (err) {
-        console.warn('[RenderScheduler] Idle task failed:', err);
+        console.warn("[RenderScheduler] Idle task failed:", err);
       }
       runNext(index + 1);
     };
@@ -207,17 +204,19 @@ export class RenderScheduler {
       clearTimeout(this._idleHandle);
       this._idleHandle = null;
     }
-    console.warn('[RenderScheduler] Suspended — memory pressure.');
+    if (import.meta.env.DEV) console.warn("[RenderScheduler] Suspended — memory pressure.");
   }
 
   resume(): void {
     if (!this._suspended) return;
     this._suspended = false;
     this._armIdleTimer();
-    console.info('[RenderScheduler] Resumed.');
+    if (import.meta.env.DEV) console.info("[RenderScheduler] Resumed.");
   }
 
-  get isSuspended(): boolean { return this._suspended; }
+  get isSuspended(): boolean {
+    return this._suspended;
+  }
 
   // ── Diagnostics ───────────────────────────────────────────────────────────
 

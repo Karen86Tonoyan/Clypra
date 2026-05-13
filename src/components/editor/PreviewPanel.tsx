@@ -1,7 +1,6 @@
-import React, { useEffect, useMemo, useRef, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Check, ChevronDown, Expand, Pause, Play, Shrink, SkipBack, SkipForward, Volume2, VolumeX } from "lucide-react";
-import { usePlaybackClock, usePlaybackControls } from "../../hooks/usePlaybackClock";
-import { getPlaybackClock } from "../../core/playback";
+import { usePlaybackClock, usePlaybackControls, getPlaybackClock } from "../../hooks/usePlaybackClock";
 import { useProjectStore } from "../../store/projectStore";
 import { useTimelineStore } from "../../store/timelineStore";
 import { useUIStore } from "../../store/uiStore";
@@ -9,6 +8,7 @@ import { evaluateSceneCached } from "../../core/evaluation/evaluator";
 import { getFrameScheduler } from "../../core/scheduler/FrameScheduler";
 import { getActiveSessionOrNull } from "../../core/runtime/ProjectSession";
 import { SourcePreview } from "./SourcePreview";
+import { GPUTextureCache } from "../../lib/gpuTextureCache";
 import { cn } from "../../lib/utils";
 import type { EvaluatedMediaLayer } from "../../core/evaluation/types";
 
@@ -170,6 +170,8 @@ const ProgramPreview: React.FC = () => {
   const aspectMenuRef = useRef<HTMLDivElement>(null);
   const speedMenuRef = useRef<HTMLDivElement>(null);
   const [useCanvasPreview] = useState(true); // Canvas is authoritative visual output
+  const gpuCacheRef = useRef<GPUTextureCache | null>(null);
+  const gpuFallbackRef = useRef(false); // true if WebGL2 unavailable → use Canvas2D
   const [showTelemetry, setShowTelemetry] = useState(false);
   const [telemetryStats, setTelemetryStats] = useState<{
     avgEvaluationTimeMs: number;
@@ -214,7 +216,7 @@ const ProgramPreview: React.FC = () => {
       setFrameRate(newFrameRate);
       prevFrameRateRef.current = newFrameRate;
     }
-  }, [project, clips, setDuration, setFrameRate]);
+  }, [project, clips]);
 
   useEffect(() => {
     if (!aspectMenuOpen) return;
@@ -300,6 +302,8 @@ const ProgramPreview: React.FC = () => {
   const displayHeight = canvasHeight * scale;
 
   // Canvas rendering - INDEPENDENT RAF LOOP (not tied to React state)
+  // GPU-first: uploads ImageBitmaps as WebGL2 textures for zero-copy reuse.
+  // Falls back to Canvas2D if WebGL2 is unavailable.
   useEffect(() => {
     if (!useCanvasPreview || !canvasRef.current || !project) return;
 
@@ -307,10 +311,27 @@ const ProgramPreview: React.FC = () => {
 
     if (displayWidth === 0 || displayHeight === 0) return;
 
-    // Clear canvas immediately when dimensions change to avoid showing stretched content
-    const ctx = canvas.getContext("2d");
-    if (ctx) {
-      ctx.clearRect(0, 0, displayWidth, displayHeight);
+    // ── Initialize GPU or Canvas2D rendering context ──────────────────
+    let gpuCache: GPUTextureCache | null = null;
+    let ctx2d: CanvasRenderingContext2D | null = null;
+
+    if (!gpuFallbackRef.current) {
+      try {
+        gpuCache = new GPUTextureCache(canvas);
+        gpuCacheRef.current = gpuCache;
+        gpuCache.clear();
+      } catch {
+        // WebGL2 unavailable — fall back to Canvas2D
+        gpuFallbackRef.current = true;
+        gpuCache = null;
+      }
+    }
+
+    if (!gpuCache) {
+      ctx2d = canvas.getContext("2d");
+      if (ctx2d) {
+        ctx2d.clearRect(0, 0, displayWidth, displayHeight);
+      }
     }
 
     // Get scheduler and update timeline state
@@ -321,6 +342,9 @@ const ProgramPreview: React.FC = () => {
     let isActive = true;
     let isRendering = false;
     let lastJobId: string | null = null;
+
+    // GPU memory limit for preview frame textures (128 MB)
+    const GPU_MEMORY_LIMIT_MB = 128;
 
     // Independent render loop (reads clock imperatively)
     const renderLoop = () => {
@@ -337,6 +361,17 @@ const ProgramPreview: React.FC = () => {
 
       isRendering = true;
       const timeToRender = clock.time;
+
+      // Check GPU texture cache for this frame (skip scheduler entirely on cache hit)
+      if (gpuCache) {
+        const cacheKey = `preview:${epoch}:${timeToRender.toFixed(3)}:${displayWidth}x${displayHeight}`;
+        if (gpuCache.hasTexture(cacheKey)) {
+          gpuCache.clear();
+          gpuCache.renderTexture(cacheKey, 0, 0, displayWidth, displayHeight);
+          isRendering = false;
+          return;
+        }
+      }
 
       // Cancel previous job if still pending to prevent queue buildup
       if (lastJobId) {
@@ -372,10 +407,20 @@ const ProgramPreview: React.FC = () => {
           if (!isActive) return;
 
           if (result.data instanceof ImageBitmap) {
-            const ctx = canvas.getContext("2d");
-            if (ctx) {
-              ctx.clearRect(0, 0, displayWidth, displayHeight);
-              ctx.drawImage(result.data, 0, 0);
+            if (gpuCache) {
+              // GPU path: upload bitmap as texture, render from GPU, close bitmap
+              const cacheKey = `preview:${epoch}:${timeToRender.toFixed(3)}:${displayWidth}x${displayHeight}`;
+              gpuCache.uploadTexture(cacheKey, result.data, result.data.width, result.data.height);
+              gpuCache.clear();
+              gpuCache.renderTexture(cacheKey, 0, 0, displayWidth, displayHeight);
+              result.data.close();
+
+              // Evict LRU textures if GPU memory exceeds limit
+              gpuCache.evictLRU(GPU_MEMORY_LIMIT_MB);
+            } else if (ctx2d) {
+              // Canvas2D fallback path
+              ctx2d.clearRect(0, 0, displayWidth, displayHeight);
+              ctx2d.drawImage(result.data, 0, 0);
               result.data.close();
             }
           }
@@ -417,6 +462,11 @@ const ProgramPreview: React.FC = () => {
       }
       if (lastJobId) {
         scheduler.cancel(lastJobId);
+      }
+      // Dispose GPU cache to release all WebGL textures and context
+      if (gpuCache) {
+        gpuCache.dispose();
+        gpuCacheRef.current = null;
       }
     };
   }, [useCanvasPreview, clips, tracks, mediaAssets, project, epoch, clock, displayWidth, displayHeight]);
@@ -467,12 +517,17 @@ const ProgramPreview: React.FC = () => {
 
       // Play/pause based on clock state
       if (clockState.state === "playing") {
-        if (video.paused) {
-          const p = video.play();
-          if (p && typeof p.catch === "function")
-            void p.catch((err) => {
-              console.error("video.play() failed:", err);
+        if (video.paused && video.readyState >= 2) {
+          // Only play if video has enough data (HAVE_CURRENT_DATA or better)
+          const playPromise = video.play();
+          if (playPromise !== undefined) {
+            playPromise.catch((err) => {
+              // Ignore AbortError - it's expected when rapidly seeking or changing state
+              if (err.name !== "AbortError") {
+                console.warn("video.play() failed:", err);
+              }
             });
+          }
         }
       } else {
         if (!video.paused) {
@@ -604,7 +659,7 @@ const ProgramPreview: React.FC = () => {
       <div className="flex items-center px-4 h-10 shrink-0 gap-2">
         <span className="text-[13px] font-semibold text-text-primary tracking-tight">Program Preview</span>
         <span className="text-[13px] text-text-muted">— Timeline</span>
-        <button onClick={() => setShowTelemetry((s) => !s)} className={cn("ml-auto px-2 h-6 rounded text-[10px] font-medium transition-colors", showTelemetry ? "bg-accent/20 text-accent" : "text-text-muted hover:text-text-primary hover:bg-white/6")} title="Toggle render telemetry">
+        <button onClick={() => setShowTelemetry((s) => !s)} className={cn("ml-auto px-2 h-6 rounded text-[10px] font-medium transition-colors", showTelemetry ? "bg-accent/20 text-accent" : "text-text-muted hover:text-text-primary hover:bg-white/6")} title="Toggle render telemetry" aria-label="Toggle render telemetry">
           Stats
         </button>
       </div>
@@ -863,7 +918,7 @@ const ProgramPreview: React.FC = () => {
 
         {/* Center play controls */}
         <div className="absolute left-1/2 -translate-x-1/2 flex items-center gap-1">
-          <button onClick={() => seek(Math.max(0, currentTime - step))} className="w-7 h-7 flex items-center justify-center rounded hover:bg-white/6 transition-colors text-text-muted hover:text-text-primary" title="Previous frame">
+          <button onClick={() => seek(Math.max(0, currentTime - step))} className="w-7 h-7 flex items-center justify-center rounded hover:bg-white/6 transition-colors text-text-muted hover:text-text-primary" title="Previous frame" aria-label="Previous frame">
             <SkipBack className="w-3.5 h-3.5" />
           </button>
           <button
@@ -872,10 +927,11 @@ const ProgramPreview: React.FC = () => {
             }}
             className="w-8 h-8 flex items-center justify-center rounded-full hover:bg-white/6 transition-colors text-text-primary mx-1"
             title={isPlaying ? "Pause" : "Play"}
+            aria-label={isPlaying ? "Pause playback" : "Play playback"}
           >
             {isPlaying ? <Pause className="w-[18px] h-[18px]" /> : <Play className="w-[18px] h-[18px] ml-0.5" />}
           </button>
-          <button onClick={() => seek(Math.min(duration, currentTime + step))} className="w-7 h-7 flex items-center justify-center rounded hover:bg-white/6 transition-colors text-text-muted hover:text-text-primary" title="Next frame">
+          <button onClick={() => seek(Math.min(duration, currentTime + step))} className="w-7 h-7 flex items-center justify-center rounded hover:bg-white/6 transition-colors text-text-muted hover:text-text-primary" title="Next frame" aria-label="Next frame">
             <SkipForward className="w-3.5 h-3.5" />
           </button>
         </div>
@@ -916,13 +972,13 @@ const ProgramPreview: React.FC = () => {
             )}
           </div>
 
-          <button onClick={() => setPreviewScaleMode((m) => (m === "fit" ? "fill" : "fit"))} className="w-6 h-6 flex items-center justify-center rounded text-text-muted hover:text-text-primary hover:bg-white/6 transition-colors" title={previewScaleMode === "fit" ? "Fill preview — scale to cover (crop edges)" : "Fit preview — show entire frame (letterbox)"}>
+          <button onClick={() => setPreviewScaleMode((m) => (m === "fit" ? "fill" : "fit"))} className="w-6 h-6 flex items-center justify-center rounded text-text-muted hover:text-text-primary hover:bg-white/6 transition-colors" title={previewScaleMode === "fit" ? "Fill preview — scale to cover (crop edges)" : "Fit preview — show entire frame (letterbox)"} aria-label={previewScaleMode === "fit" ? "Fill preview" : "Fit preview"}>
             {previewScaleMode === "fit" ? <Expand className="w-3.5 h-3.5" /> : <Shrink className="w-3.5 h-3.5" />}
           </button>
 
           <div className="w-px h-4 bg-white/10 mx-1" />
 
-          <button onClick={() => setIsMuted((m) => !m)} className="w-6 h-6 flex items-center justify-center rounded text-text-muted hover:text-text-primary hover:bg-white/6 transition-colors" title={isMuted ? "Unmute" : "Mute"}>
+          <button onClick={() => setIsMuted((m) => !m)} className="w-6 h-6 flex items-center justify-center rounded text-text-muted hover:text-text-primary hover:bg-white/6 transition-colors" title={isMuted ? "Unmute" : "Mute"} aria-label={isMuted ? "Unmute audio" : "Mute audio"}>
             {isMuted ? <VolumeX className="w-3.5 h-3.5" /> : <Volume2 className="w-3.5 h-3.5" />}
           </button>
 

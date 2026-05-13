@@ -29,10 +29,11 @@
  */
 
 import { create } from "zustand";
-import { RenderRuntime } from "../lib/renderEngine/renderRuntime";
-import { type QualityPreset, type RendererMode, type SrpConfig } from "../lib/renderEngine/types";
+import { RenderRuntime } from "@/lib/renderEngine/renderRuntime";
+import { type QualityPreset, type RendererMode, type SrpConfig } from "@/lib/renderEngine/types";
 import { resetFrameScheduler } from "../core/scheduler/FrameScheduler";
 import { resetPlaybackClock } from "../core/playback/PlaybackClock";
+import { resetEvaluationCache } from "../core/evaluation/cache";
 
 interface RenderEngineStore {
   runtime: RenderRuntime | null;
@@ -63,6 +64,7 @@ export const useRenderEngineStore = create<RenderEngineStore>((set, get) => ({
     if (runtime) {
       resetFrameScheduler();
       resetPlaybackClock();
+      resetEvaluationCache();
       runtime.teardown();
       set({ runtime: null });
     }

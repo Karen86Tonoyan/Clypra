@@ -26,8 +26,8 @@
  */
 
 import { create } from "zustand";
-import type { MediaAsset } from "../types";
-import { getPlaybackClock } from "../hooks/usePlaybackClock";
+import type { MediaAsset } from "@/types";
+import { getPlaybackClock } from "@/hooks/usePlaybackClock";
 
 interface UIStore {
   selectedClipIds: string[]; // Multi-select support

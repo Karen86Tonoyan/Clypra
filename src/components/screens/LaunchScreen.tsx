@@ -1,10 +1,10 @@
 import React, { useEffect, useState } from "react";
 import { Film, Image as ImageIcon, Plus, Trash2, Clock, ChevronRight, Sparkles } from "lucide-react";
-import { Button } from "../ui/Button";
-import { Modal } from "../ui/Modal";
-import { useProjectStore } from "../../store/projectStore";
-import { useSettingsStore } from "../../store/settingsStore";
-import type { AspectRatio, MediaAsset, Project } from "../../types";
+import { Button } from "@/components/ui/Button";
+import { Modal } from "@/components/ui/Modal";
+import { useProjectStore } from "@/store/projectStore";
+import { useSettingsStore } from "@/store/settingsStore";
+import type { AspectRatio, MediaAsset, Project } from "@/types";
 
 interface LaunchScreenProps {
   onProjectCreate: (name: string, aspectRatio: AspectRatio, frameRate: 24 | 30 | 60) => void;

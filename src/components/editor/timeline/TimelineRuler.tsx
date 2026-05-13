@@ -1,4 +1,4 @@
-import React, { useRef, useEffect, useState } from "react";
+import React, { useRef, useEffect, useState, useMemo, useCallback } from "react";
 import { usePlayback } from "../../../hooks/usePlayback";
 
 interface TimelineRulerProps {
@@ -51,47 +51,52 @@ export const TimelineRuler: React.FC<TimelineRulerProps> = ({ pixelsPerSecond, s
     return () => ro.disconnect();
   }, []);
 
-  // ── Pick best interval ─────────────────────────────────────────────────
-  let majorInterval = INTERVAL_TABLE[INTERVAL_TABLE.length - 1][0];
-  let minorDivisions = INTERVAL_TABLE[INTERVAL_TABLE.length - 1][1];
-
-  // Iterate smallest → largest: pick the smallest interval that still
-  // guarantees ≥ MIN_LABEL_GAP_PX between labels (no overlap).
-  for (let i = INTERVAL_TABLE.length - 1; i >= 0; i--) {
-    const [interval, divisions] = INTERVAL_TABLE[i];
-    if (interval * pixelsPerSecond >= MIN_LABEL_GAP_PX) {
-      majorInterval = interval;
-      minorDivisions = divisions;
-      break;
-    }
-  }
-
-  const minorInterval = majorInterval / minorDivisions;
-
-  // ── Visible time range ─────────────────────────────────────────────────
-  const padPx = 60;
-  const startTime = Math.max(0, (scrollLeft - padPx) / pixelsPerSecond);
-  const endTime = (scrollLeft + viewportWidth + padPx) / pixelsPerSecond;
-
-  // ── Generate ticks ─────────────────────────────────────────────────────
-  const ticks: { time: number; isMajor: boolean }[] = [];
-  const firstTick = Math.floor(startTime / minorInterval) * minorInterval;
-
-  for (let t = firstTick; t <= endTime; t += minorInterval) {
-    const time = Math.round(t * 10000) / 10000;
-    if (time < 0) continue;
-
-    const isMajor = Math.abs(time % majorInterval) < minorInterval * 0.01 || Math.abs((time % majorInterval) - majorInterval) < minorInterval * 0.01;
-
-    ticks.push({ time, isMajor });
-  }
-
-  // ── Format label (CapCut style: always 00:SS) ──────────────────────────
-  const formatLabel = (seconds: number): string => {
+  // ── Format label (CapCut style: always 00:SS) ──────────────────────────────
+  const formatLabel = useCallback((seconds: number): string => {
     const mins = Math.floor(seconds / 60);
     const secs = Math.floor(seconds % 60);
     return `${String(mins).padStart(2, "0")}:${String(secs).padStart(2, "0")}`;
-  };
+  }, []);
+
+  // ── Memoized tick generation ─────────────────────────────────────────────────
+  const ticks = useMemo(() => {
+    // Pick best interval
+    let majorInterval = INTERVAL_TABLE[INTERVAL_TABLE.length - 1][0];
+    let minorDivisions = INTERVAL_TABLE[INTERVAL_TABLE.length - 1][1];
+
+    // Iterate smallest → largest: pick the smallest interval that still
+    // guarantees ≥ MIN_LABEL_GAP_PX between labels (no overlap).
+    for (let i = INTERVAL_TABLE.length - 1; i >= 0; i--) {
+      const [interval, divisions] = INTERVAL_TABLE[i];
+      if (interval * pixelsPerSecond >= MIN_LABEL_GAP_PX) {
+        majorInterval = interval;
+        minorDivisions = divisions;
+        break;
+      }
+    }
+
+    const minorInterval = majorInterval / minorDivisions;
+
+    // Visible time range
+    const padPx = 60;
+    const startTime = Math.max(0, (scrollLeft - padPx) / pixelsPerSecond);
+    const endTime = (scrollLeft + viewportWidth + padPx) / pixelsPerSecond;
+
+    // Generate ticks
+    const result: { time: number; isMajor: boolean }[] = [];
+    const firstTick = Math.floor(startTime / minorInterval) * minorInterval;
+
+    for (let t = firstTick; t <= endTime; t += minorInterval) {
+      const time = Math.round(t * 10000) / 10000;
+      if (time < 0) continue;
+
+      const isMajor = Math.abs(time % majorInterval) < minorInterval * 0.01 || Math.abs((time % majorInterval) - majorInterval) < minorInterval * 0.01;
+
+      result.push({ time, isMajor });
+    }
+
+    return result;
+  }, [pixelsPerSecond, scrollLeft, viewportWidth]);
 
   // ── Render ─────────────────────────────────────────────────────────────
   return (

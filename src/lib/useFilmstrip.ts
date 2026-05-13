@@ -159,127 +159,136 @@ export function useFilmstrip(opts: UseFilmstripOptions): UseFilmstripResult {
     // Cancel any in-flight request for the previous signature.
     disposePrev();
 
-    // Keep previous artifacts visible during upgrade (don't clear on re-request)
-    setIsLoading(true);
-
     // Accumulated artifacts for this epoch — keyed by `${timestampMs}:${spatialTier}`
     // Higher-tier arrivals naturally replace lower-tier entries for the same timestamp.
     const accumulated = new Map<string, TransportArtifact>();
 
-    // RAF-batched flush: coalesce all artifacts arriving within the same frame
-    // into a single setArtifacts() call. Without this, every artifact triggers
-    // a React re-render → full canvas redraw, causing visible flickering as
-    // L0/L1/L2/L3 thumbnails replace each other one-by-one.
     let rafId: number | null = null;
-    let flushDirty = false;
 
-    const scheduleFlush = () => {
-      if (rafId !== null) return; // already scheduled
-      rafId = requestAnimationFrame(() => {
-        rafId = null;
-        if (!flushDirty) return;
-        flushDirty = false;
+    // Debounce: wait 100ms for zoom/tier changes to settle before decoding.
+    // This prevents request storms during pinch-zoom where tier commits rapidly.
+    const debounceTimer = setTimeout(startRequest, 100);
 
-        // For each timestamp, keep only the highest tier received so far
-        // CRITICAL: Close lower-tier bitmaps that are being replaced to prevent GPU leak
-        const bestByTime = new Map<number, TransportArtifact>();
-        for (const a of accumulated.values()) {
-          const existing = bestByTime.get(a.timestampMs);
-          if (!existing || a.spatialTier > existing.spatialTier) {
-            // Close the replaced bitmap if it's a different object
-            if (existing && existing.bitmap && existing.bitmap !== a.bitmap) {
-              existing.bitmap.close();
-            }
-            bestByTime.set(a.timestampMs, a);
-          }
-        }
-        const sorted = Array.from(bestByTime.values()).sort((a, b) => a.timestampMs - b.timestampMs);
+    function startRequest() {
+      // Keep previous artifacts visible during upgrade (don't clear on re-request)
+      setIsLoading(true);
 
-        // console.log("[useFilmstrip] scheduleFlush: setting", sorted.length, "artifacts");
-        // Close previous epoch's bitmaps now that we have new ones ready
-        // This prevents black gaps during the transition
-        for (const prevArtifact of prevArtifactsRef.current) {
-          if (prevArtifact.bitmap) {
-            // Only close if this bitmap isn't being reused in the new set
-            const isReused = sorted.some((a) => a.bitmap === prevArtifact.bitmap);
-            if (!isReused) {
-              prevArtifact.bitmap.close();
-            }
-          }
-        }
-        prevArtifactsRef.current = sorted;
+      // RAF-batched flush: coalesce all artifacts arriving within the same frame
+      // into a single setArtifacts() call. Without this, every artifact triggers
+      // a React re-render → full canvas redraw, causing visible flickering as
+      // L0/L1/L2/L3 thumbnails replace each other one-by-one.
+      let flushDirty = false;
 
-        // Use functional update to avoid dependency on artifacts state
-        setArtifacts(() => sorted);
-        currentArtifactsRef.current = sorted; // Keep ref in sync for unmount cleanup
-        setIsLoading(false);
-      });
-    };
-
-    // Progressive tier sequence: always start at L0 for fast-paint, then
-    // converge to the SRP-committed tier for the current zoom level.
-    cancelRef.current = requestProgressiveTiers({
-      videoPath,
-      timestampsMs,
-      startTier,
-      targetTier,
-      epochId,
-      clipId,
-      requestId,
-      onArtifact: (artifact) => {
-        // console.log("[useFilmstrip] onArtifact received:", artifact.timestampMs, "tier:", artifact.spatialTier, "bitmap:", !!artifact.bitmap);
-        const key = `${artifact.timestampMs}:${artifact.spatialTier}`;
-        // Close existing bitmap for this key if we're replacing it
-        const existing = accumulated.get(key);
-        if (existing && existing.bitmap && existing.bitmap !== artifact.bitmap) {
-          // console.log("[useFilmstrip] Closing replaced bitmap for key:", key);
-          existing.bitmap.close();
-        }
-        accumulated.set(key, artifact);
-        flushDirty = true;
-        scheduleFlush();
-      },
-      onComplete: () => {
-        // Final flush — ensure all remaining artifacts are committed
-        if (rafId !== null) {
-          cancelAnimationFrame(rafId);
+      const scheduleFlush = () => {
+        if (rafId !== null) return; // already scheduled
+        rafId = requestAnimationFrame(() => {
           rafId = null;
-        }
-        // Synchronous final flush to guarantee nothing is dropped
-        // CRITICAL: Close lower-tier bitmaps that are being replaced
-        const bestByTime = new Map<number, TransportArtifact>();
-        for (const a of accumulated.values()) {
-          const existing = bestByTime.get(a.timestampMs);
-          if (!existing || a.spatialTier > existing.spatialTier) {
-            // Close the replaced bitmap if it's a different object
-            if (existing && existing.bitmap && existing.bitmap !== a.bitmap) {
-              existing.bitmap.close();
-            }
-            bestByTime.set(a.timestampMs, a);
-          }
-        }
-        const sorted = Array.from(bestByTime.values()).sort((a, b) => a.timestampMs - b.timestampMs);
+          if (!flushDirty) return;
+          flushDirty = false;
 
-        // Close previous epoch's bitmaps now that the full new set is ready
-        for (const prevArtifact of prevArtifactsRef.current) {
-          if (prevArtifact.bitmap) {
-            const isReused = sorted.some((a) => a.bitmap === prevArtifact.bitmap);
-            if (!isReused) {
-              prevArtifact.bitmap.close();
+          // For each timestamp, keep only the highest tier received so far
+          // CRITICAL: Close lower-tier bitmaps that are being replaced to prevent GPU leak
+          const bestByTime = new Map<number, TransportArtifact>();
+          for (const a of accumulated.values()) {
+            const existing = bestByTime.get(a.timestampMs);
+            if (!existing || a.spatialTier > existing.spatialTier) {
+              // Close the replaced bitmap if it's a different object
+              if (existing && existing.bitmap && existing.bitmap !== a.bitmap) {
+                existing.bitmap.close();
+              }
+              bestByTime.set(a.timestampMs, a);
             }
           }
-        }
-        prevArtifactsRef.current = sorted;
+          const sorted = Array.from(bestByTime.values()).sort((a, b) => a.timestampMs - b.timestampMs);
 
-        // Use functional update to avoid dependency on artifacts state
-        setArtifacts(() => sorted);
-        currentArtifactsRef.current = sorted; // Keep ref in sync for unmount cleanup
-        setIsLoading(false);
-        isProcessingRef.current = false; // Mark processing complete
-      },
-    });
+          // console.log("[useFilmstrip] scheduleFlush: setting", sorted.length, "artifacts");
+          // Close previous epoch's bitmaps now that we have new ones ready
+          // This prevents black gaps during the transition
+          for (const prevArtifact of prevArtifactsRef.current) {
+            if (prevArtifact.bitmap) {
+              // Only close if this bitmap isn't being reused in the new set
+              const isReused = sorted.some((a) => a.bitmap === prevArtifact.bitmap);
+              if (!isReused) {
+                prevArtifact.bitmap.close();
+              }
+            }
+          }
+          prevArtifactsRef.current = sorted;
+
+          // Use functional update to avoid dependency on artifacts state
+          setArtifacts(() => sorted);
+          currentArtifactsRef.current = sorted; // Keep ref in sync for unmount cleanup
+          setIsLoading(false);
+        });
+      };
+
+      // Progressive tier sequence: always start at L0 for fast-paint, then
+      // converge to the SRP-committed tier for the current zoom level.
+      cancelRef.current = requestProgressiveTiers({
+        videoPath,
+        timestampsMs,
+        startTier,
+        targetTier,
+        epochId,
+        clipId,
+        requestId,
+        onArtifact: (artifact) => {
+          // console.log("[useFilmstrip] onArtifact received:", artifact.timestampMs, "tier:", artifact.spatialTier, "bitmap:", !!artifact.bitmap);
+          const key = `${artifact.timestampMs}:${artifact.spatialTier}`;
+          // Close existing bitmap for this key if we're replacing it
+          const existing = accumulated.get(key);
+          if (existing && existing.bitmap && existing.bitmap !== artifact.bitmap) {
+            // console.log("[useFilmstrip] Closing replaced bitmap for key:", key);
+            existing.bitmap.close();
+          }
+          accumulated.set(key, artifact);
+          flushDirty = true;
+          scheduleFlush();
+        },
+        onComplete: () => {
+          // Final flush — ensure all remaining artifacts are committed
+          if (rafId !== null) {
+            cancelAnimationFrame(rafId);
+            rafId = null;
+          }
+          // Synchronous final flush to guarantee nothing is dropped
+          // CRITICAL: Close lower-tier bitmaps that are being replaced
+          const bestByTime = new Map<number, TransportArtifact>();
+          for (const a of accumulated.values()) {
+            const existing = bestByTime.get(a.timestampMs);
+            if (!existing || a.spatialTier > existing.spatialTier) {
+              // Close the replaced bitmap if it's a different object
+              if (existing && existing.bitmap && existing.bitmap !== a.bitmap) {
+                existing.bitmap.close();
+              }
+              bestByTime.set(a.timestampMs, a);
+            }
+          }
+          const sorted = Array.from(bestByTime.values()).sort((a, b) => a.timestampMs - b.timestampMs);
+
+          // Close previous epoch's bitmaps now that the full new set is ready
+          for (const prevArtifact of prevArtifactsRef.current) {
+            if (prevArtifact.bitmap) {
+              const isReused = sorted.some((a) => a.bitmap === prevArtifact.bitmap);
+              if (!isReused) {
+                prevArtifact.bitmap.close();
+              }
+            }
+          }
+          prevArtifactsRef.current = sorted;
+
+          // Use functional update to avoid dependency on artifacts state
+          setArtifacts(() => sorted);
+          currentArtifactsRef.current = sorted; // Keep ref in sync for unmount cleanup
+          setIsLoading(false);
+          isProcessingRef.current = false; // Mark processing complete
+        },
+      });
+    } // end startRequest
 
     return () => {
+      // Cancel the debounce timer if it hasn't fired yet
+      clearTimeout(debounceTimer);
       // console.log("[useFilmstrip] Effect cleanup - cancelling request");
       // Cancel pending RAF flush before cancelling requests
       if (rafId !== null) {

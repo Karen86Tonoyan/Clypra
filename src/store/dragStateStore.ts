@@ -1,5 +1,5 @@
 import { create } from "zustand";
-import type { Clip } from "../types";
+import type { Clip } from "@/types";
 import { useTimelineStore } from "./timelineStore";
 
 interface DragStateStore {
@@ -21,7 +21,7 @@ interface DragStateStore {
   clearDragging: () => void;
   setInsertion: (trackId: string | null, time: number | null) => void;
   setGrabOffset: (x: number, y: number) => void;
-  // ✅ Bug Fix 2: Atomic update to prevent duplicate key errors
+  // Atomic update to prevent duplicate key errors
   commitDrop: (clipId: string, trackId: string, startTime: number) => void;
 }
 
@@ -68,7 +68,7 @@ export const useDragStateStore = create<DragStateStore>((set) => ({
     });
   },
 
-  // ✅ Bug Fix 2: Atomic update - combines updateClip + clearDragging into one render
+  // combines updateClip + clearDragging into one render
   commitDrop: (clipId, trackId, startTime) => {
     // Import timelineStore dynamically to avoid circular dependency
     const { updateClip } = useTimelineStore.getState();

@@ -120,9 +120,11 @@ export function isEpochStillValid(epochId: RenderEpochId, clipId?: string): bool
  * Uses SAB zero-copy path when available, otherwise copies into ImageData.
  */
 async function rgbaToImageBitmap(rgba: number[] | Uint8ClampedArray, width: number, height: number): Promise<ImageBitmap> {
-  // Always create a regular Uint8ClampedArray copy for ImageData compatibility.
-  // This works for plain number arrays, Uint8ClampedArray, and SharedArrayBuffer buffers.
-  const clamped = new Uint8ClampedArray(rgba as any);
+  // Always copy into a fresh Uint8ClampedArray backed by a plain ArrayBuffer.
+  // This is required because ImageData rejects SharedArrayBuffer-backed arrays,
+  // and handles both number[] and Uint8ClampedArray input types.
+  const clamped = new Uint8ClampedArray(rgba.length);
+  clamped.set(rgba);
 
   const imageData = new ImageData(clamped, width, height);
   return createImageBitmap(imageData);

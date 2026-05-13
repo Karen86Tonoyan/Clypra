@@ -238,23 +238,33 @@ export class ResourceManager {
   private evictLRU(): void {
     let oldestHandle: RenderResourceHandle | null = null;
     let oldestTime = Infinity;
+    let fallbackHandle: RenderResourceHandle | null = null;
+    let fallbackTime = Infinity;
 
-    // Find LRU resource with refCount = 0
+    // Find LRU resource with refCount = 0 (preferred)
+    // Also track oldest resource regardless of refCount (fallback)
     for (const [handle, resource] of this.resources.entries()) {
+      if (resource.lastAccessTime < fallbackTime) {
+        fallbackTime = resource.lastAccessTime;
+        fallbackHandle = handle;
+      }
       if (resource.refCount === 0 && resource.lastAccessTime < oldestTime) {
         oldestTime = resource.lastAccessTime;
         oldestHandle = handle;
       }
     }
 
-    if (oldestHandle) {
-      const resource = this.resources.get(oldestHandle);
+    // Prefer zero-ref eviction; fall back to oldest if all are referenced
+    const evictTarget = oldestHandle ?? fallbackHandle;
+
+    if (evictTarget) {
+      const resource = this.resources.get(evictTarget);
       if (resource) {
         // Close ImageBitmap
         if (resource.data instanceof ImageBitmap) {
           resource.data.close();
         }
-        this.resources.delete(oldestHandle);
+        this.resources.delete(evictTarget);
       }
     }
   }
