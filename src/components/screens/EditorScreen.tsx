@@ -7,28 +7,21 @@ import { SettingsModal } from "@/components/ui/SettingsModal";
 import { SuccessToast } from "@/components/ui/SuccessToast";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { usePlaybackControls } from "@/hooks/usePlaybackClock";
+import { useKeyboardShortcuts } from "@/hooks/useKeyboardShortcuts";
 import { useProjectStore } from "@/store/projectStore";
 import { useUIStore } from "@/store/uiStore";
-import { useRenderEngineStore } from "@/store/renderEngineStore";
 
 export const EditorScreen: React.FC = () => {
   const toastMessage = useProjectStore((s) => s.toastMessage);
+  const toastVariant = useProjectStore((s) => s.toastVariant);
+  const { toastMessage: shortcutToast } = useKeyboardShortcuts();
   const { setDuration } = usePlaybackControls();
-  const projectId = useProjectStore((s) => s.project?.id);
   const projectDuration = useProjectStore((s) => s.project?.duration ?? 0);
   const { showSettingsModal, toggleSettingsModal } = useUIStore();
-  const { initRuntime, destroyRuntime } = useRenderEngineStore();
 
   useEffect(() => {
-    if (projectId) {
-      setDuration(projectDuration);
-      initRuntime(projectId);
-    }
-
-    return () => {
-      destroyRuntime();
-    };
-  }, [projectId, projectDuration]);
+    setDuration(projectDuration);
+  }, [projectDuration, setDuration]);
 
   return (
     <ErrorBoundary>
@@ -36,7 +29,7 @@ export const EditorScreen: React.FC = () => {
         <div className="w-full h-full p-1.5 overflow-hidden">
           <EditorLayout />
           <SettingsModal isOpen={showSettingsModal} onClose={toggleSettingsModal} />
-          <SuccessToast message={toastMessage} />
+          <SuccessToast message={toastMessage || shortcutToast} variant={toastMessage ? toastVariant : "success"} />
         </div>
       </DndProvider>
     </ErrorBoundary>

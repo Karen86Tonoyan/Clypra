@@ -5,11 +5,11 @@
  * to consume render engine state. Components must NOT import RenderRuntime,
  * RenderScheduler, or any policy module directly for orchestration.
  *
- * Pattern: hooks subscribe to RenderRuntime state via renderEngineStore.
+ * Pattern: hooks access RenderRuntime via useRenderRuntime() hook from ProjectSession.
  */
 
 import { useEffect, useRef, useState } from "react";
-import { useRenderEngineStore } from "../../store/renderEngineStore";
+import { useRenderRuntime } from "../../hooks/useRenderRuntime";
 import { type RenderState, type RenderArtifact, type RenderEpochId, SpatialTier, TemporalTier, InteractionState, VelocityState, RendererMode } from "./types";
 import { computeEpochId } from "./epoch";
 
@@ -47,7 +47,7 @@ function defaultRenderState(clipId: string): RenderState {
  *   const renderState = useRenderState(clip.id);
  */
 export function useRenderState(clipId: string): RenderState {
-  const runtime = useRenderEngineStore((s) => s.runtime);
+  const runtime = useRenderRuntime();
   const [state, setState] = useState<RenderState>(() => defaultRenderState(clipId));
   const unsubRef = useRef<(() => void) | null>(null);
 

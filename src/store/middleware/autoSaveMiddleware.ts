@@ -18,6 +18,7 @@
  */
 
 import type { StateCreator, StoreMutatorIdentifier } from "zustand";
+import { useProjectStore } from "../projectStore";
 
 type AutoSave = <T, Mps extends [StoreMutatorIdentifier, unknown][] = [], Mcs extends [StoreMutatorIdentifier, unknown][] = []>(f: StateCreator<T, Mps, Mcs>) => StateCreator<T, Mps, Mcs>;
 
@@ -38,13 +39,7 @@ export function resumeAutoSave(): void {
   _suspended = false;
   if (_pendingSave) {
     _pendingSave = false;
-    import("../projectStore")
-      .then(({ useProjectStore }) => {
-        useProjectStore.getState().scheduleAutoSave();
-      })
-      .catch((err) => {
-        console.error("[AutoSaveMiddleware] Failed to trigger deferred auto-save:", err);
-      });
+    useProjectStore.getState().scheduleAutoSave();
   }
 }
 
@@ -60,15 +55,8 @@ const autoSaveImpl: AutoSaveImpl = (f) => (set, get, store) => {
       return;
     }
 
-    // Trigger auto-save asynchronously to avoid blocking state updates
-    // Use dynamic import to avoid circular dependency
-    import("../projectStore")
-      .then(({ useProjectStore }) => {
-        useProjectStore.getState().scheduleAutoSave();
-      })
-      .catch((err) => {
-        console.error("[AutoSaveMiddleware] Failed to trigger auto-save:", err);
-      });
+    // Synchronous call — no async side effects in middleware
+    useProjectStore.getState().scheduleAutoSave();
   };
 
   return f(wrappedSet, get, store);

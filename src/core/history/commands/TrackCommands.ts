@@ -12,6 +12,7 @@ interface TimelineState {
   tracks: Track[];
   clips: Clip[];
   mainVideoTrackId: string | null;
+  epoch: number;
 }
 
 /**
@@ -46,6 +47,7 @@ export class AddTrackCommand implements Command {
       ...state,
       tracks,
       mainVideoTrackId: state.mainVideoTrackId ?? (this.track.type === "video" ? this.track.id : null),
+      epoch: state.epoch + 1, // ✅ Epoch increment inside command
     };
   }
 
@@ -95,6 +97,7 @@ export class DeleteTrackCommand implements Command {
       ...state,
       tracks: state.tracks.filter((t) => t.id !== this.trackId),
       clips: state.clips.filter((c) => c.trackId !== this.trackId),
+      epoch: state.epoch + 1, // ✅ Epoch increment inside command
     };
   }
 
@@ -152,6 +155,7 @@ class RestoreTrackCommand implements Command {
       ...state,
       tracks,
       clips: [...state.clips, ...this.clips],
+      epoch: state.epoch + 1, // ✅ Epoch increment inside command
     };
   }
 
@@ -193,6 +197,7 @@ export class ToggleTrackPropertyCommand implements Command {
     return {
       ...state,
       tracks: state.tracks.map((track) => (track.id === this.trackId ? { ...track, [this.property]: !track[this.property] } : track)),
+      epoch: state.epoch + 1, // ✅ Epoch increment inside command
     };
   }
 

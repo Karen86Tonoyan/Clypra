@@ -14,6 +14,7 @@
 import { invoke, Channel } from "@tauri-apps/api/core";
 import { SpatialTier, SPATIAL_TIER_DIMS } from "./types";
 import type { RenderEpochId } from "./types";
+import { generateId } from "@/lib/id";
 
 // ─── SAB Detection ────────────────────────────────────────────────────────────
 
@@ -300,7 +301,7 @@ export interface RequestBatchRenderArtifactsOptions {
 export function requestBatchRenderArtifacts(opts: RequestBatchRenderArtifactsOptions): () => void {
   const { videoPath, timestampsMs, spatialTiers, epochId, clipId, onArtifact, onComplete, onError, requestId } = opts;
 
-  const reqId = requestId || crypto.randomUUID();
+  const reqId = requestId || generateId("req");
 
   if (timestampsMs.length === 0) {
     onComplete?.();

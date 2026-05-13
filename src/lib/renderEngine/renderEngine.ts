@@ -1,13 +1,13 @@
 /**
- * Render Runtime
+ * Render Engine
  *
- * Scoped engine instance — one per project, owned by renderEngineStore.
+ * Scoped execution engine — one per project, owned by ProjectSession.
  * NOT a global singleton. NOT a React component.
  *
  * Wires: ISM, SRP, TSP, EpochManager, InvalidationSystem, RenderScheduler.
  * Exposes reactive RenderState for hook subscription.
  *
- * React hooks subscribe via renderEngineStore → RenderRuntime.subscribe(clipId).
+ * React hooks access via useRenderRuntime() → RenderEngine.subscribe(clipId).
  * React components never import this directly for orchestration.
  */
 
@@ -30,9 +30,9 @@ interface ClipRenderState {
   transformGraphVersion: number;
 }
 
-// ─── Runtime ──────────────────────────────────────────────────────────────────
+// ─── Engine ───────────────────────────────────────────────────────────────────
 
-export class RenderRuntime {
+export class RenderEngine {
   readonly projectId: string;
 
   private _ism: InteractionStateMachine;

@@ -10,6 +10,7 @@ import type { Clip } from "../../../types";
 
 interface TimelineState {
   clips: Clip[];
+  epoch: number;
 }
 
 export class UpdateClipCommand implements Command {
@@ -32,6 +33,7 @@ export class UpdateClipCommand implements Command {
     return {
       ...state,
       clips: state.clips.map((c) => (c.id === this.clipId ? { ...c, ...this.newProperties } : c)),
+      epoch: state.epoch + 1, // ✅ Epoch increment inside command
     };
   }
 

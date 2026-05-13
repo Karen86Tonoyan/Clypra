@@ -1,11 +1,11 @@
 /**
- * History Manager - Central Undo/Redo System
+ * Command Journal - Central Undo/Redo System
  *
  * This is the deterministic timeline operation journal.
  * All timeline mutations flow through here.
  *
  * Architecture:
- *   User Action → Command → HistoryManager → Timeline State → Epoch++
+ *   User Action → Command → CommandJournal → Timeline State → Epoch++
  *
  * Features:
  * - Command-based (not snapshot-based)
@@ -15,12 +15,12 @@
  */
 
 import type { Command } from "./Command";
-import { Transaction, TransactionState, CompositeCommand } from "./Transaction";
+import { Transaction } from "./Transaction";
 
 /**
- * History manager configuration.
+ * Command journal configuration.
  */
-export interface HistoryConfig {
+export interface CommandJournalConfig {
   /** Maximum history size (number of commands) */
   maxSize: number;
 
@@ -34,16 +34,16 @@ export interface HistoryConfig {
 /**
  * Default history configuration.
  */
-const DEFAULT_CONFIG: HistoryConfig = {
+const DEFAULT_CONFIG: CommandJournalConfig = {
   maxSize: 100,
   enableCoalescing: true,
   coalescingWindowMs: 500,
 };
 
 /**
- * History manager state.
+ * Command journal state.
  */
-export interface HistoryState {
+export interface CommandJournalState {
   /** Can undo */
   canUndo: boolean;
 
@@ -61,16 +61,16 @@ export interface HistoryState {
 }
 
 /**
- * History manager - central undo/redo system.
+ * Command journal - central undo/redo system.
  */
-export class HistoryManager {
+export class CommandJournal {
   private _history: Command[] = [];
   private _position: number = -1;
-  private _config: HistoryConfig;
+  private _config: CommandJournalConfig;
   private _activeTransaction: Transaction | null = null;
-  private _listeners: Set<(state: HistoryState) => void> = new Set();
+  private _listeners: Set<(state: CommandJournalState) => void> = new Set();
 
-  constructor(config: Partial<HistoryConfig> = {}) {
+  constructor(config: Partial<CommandJournalConfig> = {}) {
     this._config = { ...DEFAULT_CONFIG, ...config };
   }
 
@@ -286,7 +286,7 @@ export class HistoryManager {
   /**
    * Get current history state.
    */
-  getState(): HistoryState {
+  getState(): CommandJournalState {
     return {
       canUndo: this.canUndo(),
       canRedo: this.canRedo(),
@@ -325,7 +325,7 @@ export class HistoryManager {
   /**
    * Subscribe to history state changes.
    */
-  subscribe(listener: (state: HistoryState) => void): () => void {
+  subscribe(listener: (state: CommandJournalState) => void): () => void {
     this._listeners.add(listener);
     return () => this._listeners.delete(listener);
   }

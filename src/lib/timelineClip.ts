@@ -1,5 +1,6 @@
 import { DEFAULT_STILL_DURATION_SECONDS } from "../constants/config";
 import type { Clip, MediaAsset } from "../types";
+import { generateId } from "./id";
 
 export const resolveClipDuration = (asset: MediaAsset): number => {
   if (asset.type === "image") return DEFAULT_STILL_DURATION_SECONDS;
@@ -152,7 +153,7 @@ export const createClipFromAsset = ({ asset, trackId, startTime, width, height }
   );
 
   return {
-    id: `clip-${Date.now()}-${Math.random()}`,
+    id: generateId("clip"),
     trackId,
     mediaId: asset.id,
     startTime,

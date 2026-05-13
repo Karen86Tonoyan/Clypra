@@ -7,9 +7,11 @@
 import type { Command } from "../Command";
 import { generateCommandId } from "../Command";
 import type { Clip } from "../../../types";
+import { generateId } from "@/lib/id";
 
 interface TimelineState {
   clips: Clip[];
+  epoch: number;
 }
 
 export class SplitClipCommand implements Command {
@@ -50,7 +52,7 @@ export class SplitClipCommand implements Command {
 
     // Generate new clip ID if not already done
     if (!this.newClipId) {
-      this.newClipId = `clip-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+      this.newClipId = generateId("clip");
     }
 
     const newClip: Clip = {
@@ -73,6 +75,7 @@ export class SplitClipCommand implements Command {
         }),
         newClip,
       ],
+      epoch: state.epoch + 1, // ✅ Epoch increment inside command
     };
   }
 
@@ -130,6 +133,7 @@ class MergeSplitClipsCommand implements Command {
           }
           return c;
         }),
+      epoch: state.epoch + 1, // ✅ Epoch increment inside command
     };
   }
 

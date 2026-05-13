@@ -1,5 +1,5 @@
 import React, { useState, lazy, Suspense } from "react";
-import { Film, Upload, Home, Settings, Camera, Save, Check } from "lucide-react";
+import { Film, Upload, Home, Settings, Camera } from "lucide-react";
 import { Button } from "../ui/Button";
 import { usePlayback } from "../../hooks/usePlayback";
 import { useProjectStore } from "../../store/projectStore";
@@ -13,13 +13,12 @@ const ExportDialog = lazy(() => import("../ui/ExportDialog").then((m) => ({ defa
 
 export const TopBar: React.FC = () => {
   const { currentTime, duration, formatTime } = usePlayback();
-  const { project, closeProject, mediaAssets, scheduleAutoSave } = useProjectStore();
+  const { project, closeProject, mediaAssets } = useProjectStore();
   const { toggleSettingsModal } = useUIStore();
   const { clips, tracks, epoch } = useTimelineStore();
   const { state: historyState } = useHistoryStore();
   const [isExportingFrame, setIsExportingFrame] = useState(false);
   const [showExportDialog, setShowExportDialog] = useState(false);
-  const [showSaved, setShowSaved] = useState(false);
 
   const handleExportFrame = async () => {
     if (!project) return;
@@ -41,12 +40,6 @@ export const TopBar: React.FC = () => {
     } finally {
       setIsExportingFrame(false);
     }
-  };
-
-  const handleManualSave = () => {
-    scheduleAutoSave();
-    setShowSaved(true);
-    setTimeout(() => setShowSaved(false), 2000);
   };
 
   return (
@@ -84,12 +77,6 @@ export const TopBar: React.FC = () => {
               )}
             </div>
           )}
-
-          <Button variant="ghost" size="icon-sm" onClick={handleManualSave} title="Save Project (Cmd+S)" className={showSaved ? "text-green-500" : ""} style={{ WebkitAppRegion: "no-drag" } as React.CSSProperties}>
-            {showSaved ? <Check className="w-3.5 h-3.5" /> : <Save className="w-3.5 h-3.5" />}
-          </Button>
-
-          <div className="w-px h-5 bg-border/50" />
 
           <Button variant="ghost" size="icon-sm" onClick={handleExportFrame} disabled={isExportingFrame} title="Export Current Frame (PNG)" style={{ WebkitAppRegion: "no-drag" } as React.CSSProperties}>
             <Camera className="w-3.5 h-3.5" />

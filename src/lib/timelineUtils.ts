@@ -5,9 +5,12 @@ export { VELOCITY_THRESHOLDS, classifyVelocity } from "./renderEngine/types";
 import type { DragItem, Track, Clip, DensityConfig, DensityLevel } from "../types";
 import { useTimelineStore } from "../store/timelineStore";
 import { useProjectStore } from "../store/projectStore";
+import { useHistoryStore } from "../store/historyStore";
+import { AddTrackCommand, AddClipCommand, DeleteClipCommand } from "../core/history/commands";
 import { capitalize } from "./utils";
 import { DensityLevel as DensityLevelEnum } from "../types";
 import { createClipFromAsset } from "./timelineClip";
+import { generateId } from "@/lib/id";
 
 // Density configurations mapping zoom levels to extraction densities. Each configuration defines the time interval between thumbnails and the zoom range.
 export const DENSITY_CONFIGS: DensityConfig[] = [
@@ -69,7 +72,8 @@ export function generateTimestampGrid(trimIn: number, trimOut: number, interval:
 }
 
 export function handleCreateTrackAndDrop(item: DragItem, monitor: any, insertIndex: number) {
-  const { addTrack, addClip, removeClip, tracks, pixelsPerSecond, scrollLeft } = useTimelineStore.getState();
+  const { tracks, pixelsPerSecond, scrollLeft } = useTimelineStore.getState();
+  const { execute } = useHistoryStore.getState();
 
   const offset = monitor.getClientOffset();
   const containerRect = document.getElementById("timeline-tracks-container")?.getBoundingClientRect();
@@ -82,7 +86,7 @@ export function handleCreateTrackAndDrop(item: DragItem, monitor: any, insertInd
   const existingOfType = tracks.filter((t) => t.type === trackType).length;
 
   const newTrack: Track = {
-    id: crypto.randomUUID(),
+    id: generateId("track"),
     type: trackType,
     name: `${capitalize(trackType)} ${existingOfType + 1}`,
     muted: false,
@@ -91,12 +95,8 @@ export function handleCreateTrackAndDrop(item: DragItem, monitor: any, insertInd
     height: trackType === "video" ? 68 : trackType === "audio" ? 52 : 56,
   };
 
-  // Add track at specific index
-  const currentTracks = useTimelineStore.getState().tracks;
-  const newTracks = [...currentTracks.slice(0, insertIndex), newTrack, ...currentTracks.slice(insertIndex)];
-
-  // Update tracks directly
-  useTimelineStore.setState({ tracks: newTracks });
+  // Use command to add track (enables undo/redo)
+  execute(new AddTrackCommand(newTrack, insertIndex));
 
   if (item.type === "MEDIA_ASSET") {
     const { project } = useProjectStore.getState();
@@ -112,13 +112,11 @@ export function handleCreateTrackAndDrop(item: DragItem, monitor: any, insertInd
       height: canvasHeight,
     });
 
-    addClip(newClip);
+    // Use command to add clip (enables undo/redo)
+    execute(new AddClipCommand(newClip));
   } else if (item.type === "CLIP") {
-    // Moving existing clip to new track
-    removeClip(item.clip.id);
-    addClip({ ...item.clip, trackId: newTrack.id, startTime });
+    // Moving existing clip to new track - use commands (enables undo/redo)
+    execute(new DeleteClipCommand(item.clip.id));
+    execute(new AddClipCommand({ ...item.clip, trackId: newTrack.id, startTime }));
   }
-
-  // Trigger auto-save
-  useProjectStore.getState().scheduleAutoSave();
 }

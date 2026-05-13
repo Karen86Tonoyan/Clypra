@@ -4,6 +4,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { useProjectStore } from "../store/projectStore";
 import type { MediaAsset, VideoMetadata } from "../types";
 import { generateSimpleWaveform } from "../lib/audioWaveformGenerator";
+import { generateId } from "@/lib/id";
 
 export const useMediaImport = () => {
   const [isLoading, setIsLoading] = useState(false);
@@ -28,6 +29,7 @@ export const useMediaImport = () => {
       const files = Array.isArray(selected) ? selected : [selected];
       let importedCount = 0;
       let skippedCount = 0;
+      let failedCount = 0;
 
       for (const path of files) {
         try {
@@ -81,7 +83,7 @@ export const useMediaImport = () => {
             }
 
             const asset: MediaAsset = {
-              id: `asset-${Date.now()}-${Math.random()}`,
+              id: generateId("asset"),
               name: filename,
               path,
               type,
@@ -97,7 +99,7 @@ export const useMediaImport = () => {
             // For images, use the convertFileSrc to create a proper asset URL
             const { convertFileSrc } = await import("@tauri-apps/api/core");
             const asset: MediaAsset = {
-              id: `asset-${Date.now()}-${Math.random()}`,
+              id: generateId("asset"),
               name: filename,
               path,
               type: "image",
@@ -109,13 +111,19 @@ export const useMediaImport = () => {
             importedCount++;
           }
         } catch (fileError) {
-          console.error(`Failed to import ${path}:`, fileError);
+          console.error(`[MediaImport] Failed to import ${path}:`, fileError);
+          failedCount++;
           // Continue with next file instead of stopping
         }
       }
 
       // Show appropriate toast message
-      if (importedCount > 0 && skippedCount > 0) {
+      if (failedCount > 0) {
+        setToastMessage({
+          type: "warning",
+          message: `${failedCount} file(s) failed to import.${importedCount > 0 ? ` ${importedCount} succeeded.` : ""}`,
+        });
+      } else if (importedCount > 0 && skippedCount > 0) {
         setToastMessage({
           type: "warning",
           message: `Imported ${importedCount} file(s). ${skippedCount} duplicate(s) skipped.`,
@@ -132,7 +140,8 @@ export const useMediaImport = () => {
         });
       }
     } catch (error) {
-      console.error("Import failed:", error);
+      console.error("[MediaImport] Import failed:", error);
+      setToastMessage({ type: "warning", message: "Failed to open file picker" });
     } finally {
       setIsLoading(false);
     }

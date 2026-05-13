@@ -87,18 +87,86 @@ describe("EvaluationCache", () => {
     expect(stats.misses).toBe(1);
   });
 
-  it("clears all entries", () => {
+  it("clears all entries and resets memory", () => {
     const scene = { visualLayers: [], audioLayers: [], transitions: [], metadata: {} as any };
 
     cache.set({ time: 1.0, epoch: 0, clipVersion: "v1" }, scene);
     cache.set({ time: 2.0, epoch: 0, clipVersion: "v1" }, scene);
 
     expect(cache.getStats().size).toBe(2);
+    expect(cache.getStats().memoryMB).toBeGreaterThan(0);
 
     cache.clear();
 
     expect(cache.getStats().size).toBe(0);
+    expect(cache.getStats().memoryMB).toBe(0);
     expect(cache.get({ time: 1.0, epoch: 0, clipVersion: "v1" })).toBeNull();
+  });
+
+  it("evicts LRU entry (not FIFO) under count pressure", () => {
+    const mkScene = () => ({ visualLayers: [], audioLayers: [], transitions: [], metadata: {} as any });
+
+    // Insert 1, 2, 3
+    cache.set({ time: 1.0, epoch: 0, clipVersion: "v1" }, mkScene());
+    cache.set({ time: 2.0, epoch: 0, clipVersion: "v1" }, mkScene());
+    cache.set({ time: 3.0, epoch: 0, clipVersion: "v1" }, mkScene());
+
+    // Access entry 1 to make it most-recently-used
+    cache.get({ time: 1.0, epoch: 0, clipVersion: "v1" });
+
+    // Insert 4 — should evict entry 2 (oldest access), NOT entry 1
+    cache.set({ time: 4.0, epoch: 0, clipVersion: "v1" }, mkScene());
+
+    expect(cache.get({ time: 1.0, epoch: 0, clipVersion: "v1" })).not.toBeNull(); // kept (recently accessed)
+    expect(cache.get({ time: 2.0, epoch: 0, clipVersion: "v1" })).toBeNull(); // evicted (LRU)
+    expect(cache.get({ time: 3.0, epoch: 0, clipVersion: "v1" })).not.toBeNull();
+    expect(cache.get({ time: 4.0, epoch: 0, clipVersion: "v1" })).not.toBeNull();
+  });
+
+  it("evicts entries when memory budget is exceeded", () => {
+    // Use a tiny memory limit: 0.005 MB ≈ 5 KB
+    const tinyCache = new EvaluationCache(100, 0.005);
+
+    // Each empty scene ≈ 1 KB (base overhead only) ≈ 0.001 MB
+    const smallScene = { visualLayers: [], audioLayers: [], transitions: [], metadata: {} as any };
+
+    tinyCache.set({ time: 1.0, epoch: 0, clipVersion: "v1" }, smallScene);
+    tinyCache.set({ time: 2.0, epoch: 0, clipVersion: "v1" }, smallScene);
+    tinyCache.set({ time: 3.0, epoch: 0, clipVersion: "v1" }, smallScene);
+    tinyCache.set({ time: 4.0, epoch: 0, clipVersion: "v1" }, smallScene);
+    tinyCache.set({ time: 5.0, epoch: 0, clipVersion: "v1" }, smallScene);
+
+    // Large scene: 50 visual layers ≈ 50 KB ≈ 0.05 MB > our 0.005 MB budget
+    const bigLayers = Array.from({ length: 50 }, (_, i) => ({ id: `l${i}` }));
+    const bigScene = { visualLayers: bigLayers, audioLayers: [], transitions: [], metadata: {} as any } as any;
+
+    tinyCache.set({ time: 6.0, epoch: 0, clipVersion: "v1" }, bigScene);
+
+    // Some earlier entries must have been evicted to make room
+    const stats = tinyCache.getStats();
+    expect(stats.size).toBeLessThan(6);
+  });
+
+  it("tracks memory in stats", () => {
+    const scene = { visualLayers: [], audioLayers: [], transitions: [], metadata: {} as any };
+
+    expect(cache.getStats().memoryMB).toBe(0);
+
+    cache.set({ time: 1.0, epoch: 0, clipVersion: "v1" }, scene);
+    expect(cache.getStats().memoryMB).toBeGreaterThan(0);
+  });
+
+  it("invalidateEpoch decrements memory tracking", () => {
+    const scene = { visualLayers: [], audioLayers: [], transitions: [], metadata: {} as any };
+
+    cache.set({ time: 1.0, epoch: 0, clipVersion: "v1" }, scene);
+    cache.set({ time: 2.0, epoch: 1, clipVersion: "v1" }, scene);
+
+    const memBefore = cache.getStats().memoryMB;
+    cache.invalidateEpoch(1); // removes epoch 0 entry
+
+    expect(cache.getStats().memoryMB).toBeLessThan(memBefore);
+    expect(cache.getStats().size).toBe(1);
   });
 });
 
@@ -148,6 +216,36 @@ describe("computeClipVersion", () => {
 
     // Should be same because we sort before hashing
     expect(hash1).toBe(hash2);
+  });
+
+  it("is deterministic for clips with same startTime on different tracks", () => {
+    // Regression: unstable sort caused cache misses when equal-startTime clips
+    // swapped order between calls
+    const clips1 = [
+      { id: "c1", trackId: "t1", startTime: 0, duration: 5 },
+      { id: "c2", trackId: "t2", startTime: 0, duration: 5 },
+      { id: "c3", trackId: "t3", startTime: 0, duration: 5 },
+    ];
+
+    const clips2 = [
+      { id: "c3", trackId: "t3", startTime: 0, duration: 5 },
+      { id: "c1", trackId: "t1", startTime: 0, duration: 5 },
+      { id: "c2", trackId: "t2", startTime: 0, duration: 5 },
+    ];
+
+    expect(computeClipVersion(clips1)).toBe(computeClipVersion(clips2));
+  });
+
+  it("does not mutate the input array", () => {
+    const clips = [
+      { id: "c2", trackId: "t1", startTime: 10, duration: 5 },
+      { id: "c1", trackId: "t1", startTime: 0, duration: 10 },
+    ];
+    const original = [...clips];
+
+    computeClipVersion(clips);
+
+    expect(clips).toEqual(original);
   });
 
   it("generates different hash when clips added/removed", () => {

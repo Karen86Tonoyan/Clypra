@@ -5,11 +5,11 @@ import { Timeline } from "../Timeline";
 import { useTimelineStore } from "../../../../store/timelineStore";
 import { useProjectStore } from "../../../../store/projectStore";
 import { useUIStore } from "../../../../store/uiStore";
-import { useRenderEngineStore } from "../../../../store/renderEngineStore";
 
 const seekMock = vi.fn();
 const setDurationMock = vi.fn();
 const trackPropsSpy = vi.fn();
+const mockRuntimeRef = { current: null as any };
 
 vi.mock("@tauri-apps/api/event", () => ({
   listen: vi.fn().mockResolvedValue(() => undefined),
@@ -33,6 +33,10 @@ vi.mock("../../../../hooks/usePlayback", () => ({
     stop: vi.fn(),
     formatTime: vi.fn(),
   }),
+}));
+
+vi.mock("../../../../hooks/useRenderRuntime", () => ({
+  useRenderRuntime: () => mockRuntimeRef.current,
 }));
 
 vi.mock("../TimelineToolbar", () => ({
@@ -88,7 +92,6 @@ describe("Timeline click behavior", () => {
       pixelsPerSecond: 100,
     });
     useProjectStore.setState({ project: null, mediaAssets: [], recentProjects: [] });
-    useRenderEngineStore.setState({ runtime: null });
   });
 
   it("seeks when clicking empty timeline area", () => {
@@ -152,7 +155,6 @@ describe("Timeline drag interactions", () => {
       ],
       recentProjects: [],
     });
-    useRenderEngineStore.setState({ runtime: null });
   });
 
   const setupRects = (container: HTMLElement) => {
@@ -335,7 +337,6 @@ describe("Timeline wheel zoom", () => {
       rippleEditEnabled: false,
     });
     useProjectStore.setState({ project: null, mediaAssets: [], recentProjects: [] });
-    useRenderEngineStore.setState({ runtime: null });
   });
 
   afterEach(() => {
@@ -397,7 +398,10 @@ describe("Timeline wheel zoom", () => {
       attach: vi.fn(() => vi.fn()),
       notifyZoom: vi.fn(),
     };
-    useRenderEngineStore.setState({ runtime: runtime as any });
+
+    // Set the mock runtime for this test
+    mockRuntimeRef.current = runtime;
+
     useTimelineStore.setState({ pixelsPerSecond: 250, zoomLevel: 2.5 });
 
     render(<Timeline />);
@@ -406,6 +410,9 @@ describe("Timeline wheel zoom", () => {
 
     expect(runtime.notifyZoom).toHaveBeenCalledWith(2.5);
     expect(runtime.notifyZoom).not.toHaveBeenCalledWith(250);
+
+    // Reset mock
+    mockRuntimeRef.current = null;
   });
 
   it("plain wheel without Ctrl does not change pixelsPerSecond", async () => {

@@ -15,6 +15,7 @@ import { useUIStore } from "../../../store/uiStore";
 import { useTimelineStore } from "../../../store/timelineStore";
 import type { VideoMetadata } from "../../../types";
 import type { MediaTabProps } from "./types";
+import { generateId } from "@/lib/id";
 
 export const MediaTab: React.FC<MediaTabProps> = ({ onAddToTimeline }) => {
   const { mediaAssets, removeMediaAsset, addMediaAsset } = useProjectStore();
@@ -57,7 +58,7 @@ export const MediaTab: React.FC<MediaTabProps> = ({ onAddToTimeline }) => {
             const posterFrame: string | undefined = type === "video" ? ((await invoke("extract_poster_frame_command", { videoPath: filePath, duration: metadata.duration, dpr: window.devicePixelRatio || 1.0 }).catch(() => undefined)) as string | undefined) : undefined;
 
             const asset = {
-              id: `asset-${Date.now()}-${Math.random()}`,
+              id: generateId("asset"),
               name: filename,
               path: filePath,
               type,
@@ -71,7 +72,7 @@ export const MediaTab: React.FC<MediaTabProps> = ({ onAddToTimeline }) => {
             addMediaAsset(asset);
           } else {
             const asset = {
-              id: `asset-${Date.now()}-${Math.random()}`,
+              id: generateId("asset"),
               name: filename,
               path: filePath,
               type: "image" as const,
@@ -84,6 +85,7 @@ export const MediaTab: React.FC<MediaTabProps> = ({ onAddToTimeline }) => {
           }
         } catch (error) {
           console.error(`[MediaTab] Failed to import ${filePath}:`, error);
+          useProjectStore.getState().showToast(`Failed to import ${filePath.split("/").pop() || "file"}`, "error");
         }
       }
     },
@@ -133,31 +135,31 @@ export const MediaTab: React.FC<MediaTabProps> = ({ onAddToTimeline }) => {
           items={[
             usedMediaIds.has(contextMenu.mediaId)
               ? {
-                label: "Remove from Timeline",
-                onClick: () => {
-                  const { removeClip, normalizeTrack } = useTimelineStore.getState();
-                  const affectedTracks = new Set<string>();
+                  label: "Remove from Timeline",
+                  onClick: () => {
+                    const { removeClip, normalizeTrack } = useTimelineStore.getState();
+                    const affectedTracks = new Set<string>();
 
-                  // Find all clips using this media asset
-                  const clipsToRemove = clips.filter((c) => c.mediaId === contextMenu.mediaId);
+                    // Find all clips using this media asset
+                    const clipsToRemove = clips.filter((c) => c.mediaId === contextMenu.mediaId);
 
-                  // Remove all clips using this asset
-                  clipsToRemove.forEach((clip) => {
-                    affectedTracks.add(clip.trackId);
-                    removeClip(clip.id);
-                  });
+                    // Remove all clips using this asset
+                    clipsToRemove.forEach((clip) => {
+                      affectedTracks.add(clip.trackId);
+                      removeClip(clip.id);
+                    });
 
-                  // Normalize affected tracks to close gaps
-                  affectedTracks.forEach((trackId) => normalizeTrack(trackId));
-                },
-              }
+                    // Normalize affected tracks to close gaps
+                    affectedTracks.forEach((trackId) => normalizeTrack(trackId));
+                  },
+                }
               : {
-                label: "Add to Timeline",
-                onClick: () => {
-                  const asset = mediaAssets.find((a) => a.id === contextMenu.mediaId);
-                  if (asset) onAddToTimeline?.(asset, "media");
+                  label: "Add to Timeline",
+                  onClick: () => {
+                    const asset = mediaAssets.find((a) => a.id === contextMenu.mediaId);
+                    if (asset) onAddToTimeline?.(asset, "media");
+                  },
                 },
-              },
             { label: "Delete", onClick: () => removeMediaAsset(contextMenu.mediaId), danger: true },
           ]}
           position={{ x: contextMenu.x, y: contextMenu.y }}

@@ -1,6 +1,16 @@
 import { create } from "zustand";
 import type { Clip } from "@/types";
-import { useTimelineStore } from "./timelineStore";
+
+/**
+ * Action returned by commitDrop for the caller to execute.
+ * This maintains store isolation - dragStateStore never mutates timelineStore directly.
+ */
+export interface ClipDropAction {
+  type: "UPDATE_CLIP";
+  clipId: string;
+  trackId: string;
+  startTime: number;
+}
 
 interface DragStateStore {
   // The clip being dragged (removed from timeline)
@@ -21,8 +31,13 @@ interface DragStateStore {
   clearDragging: () => void;
   setInsertion: (trackId: string | null, time: number | null) => void;
   setGrabOffset: (x: number, y: number) => void;
-  // Atomic update to prevent duplicate key errors
-  commitDrop: (clipId: string, trackId: string, startTime: number) => void;
+  /**
+   * Clears drag state and returns an action for the caller to execute.
+   * This maintains store isolation - the caller is responsible for updating the timeline.
+   *
+   * @returns Action object describing the clip update to perform
+   */
+  commitDrop: (clipId: string, trackId: string, startTime: number) => ClipDropAction;
 }
 
 export const useDragStateStore = create<DragStateStore>((set) => ({
@@ -68,15 +83,18 @@ export const useDragStateStore = create<DragStateStore>((set) => ({
     });
   },
 
-  // combines updateClip + clearDragging into one render
+  /**
+   * Clears drag state and returns an action for the caller to execute.
+   * This maintains store isolation - dragStateStore never mutates timelineStore.
+   *
+   * The caller is responsible for executing the returned action:
+   * ```typescript
+   * const action = commitDrop(clipId, trackId, startTime);
+   * updateClip(action.clipId, { trackId: action.trackId, startTime: action.startTime });
+   * ```
+   */
   commitDrop: (clipId, trackId, startTime) => {
-    // Import timelineStore dynamically to avoid circular dependency
-    const { updateClip } = useTimelineStore.getState();
-
-    // Update clip position
-    updateClip(clipId, { trackId, startTime });
-
-    // Clear drag state in same update cycle
+    // Clear drag state
     set({
       draggingClip: null,
       originalTrackId: null,
@@ -86,5 +104,13 @@ export const useDragStateStore = create<DragStateStore>((set) => ({
       grabOffsetX: 0,
       grabOffsetY: 0,
     });
+
+    // Return action for caller to execute
+    return {
+      type: "UPDATE_CLIP",
+      clipId,
+      trackId,
+      startTime,
+    };
   },
 }));

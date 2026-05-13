@@ -29,11 +29,12 @@
  */
 
 import { useEffect, useRef, useState, useCallback } from "react";
-import { useRenderEngineStore } from "../store/renderEngineStore";
+import { useRenderRuntime } from "../hooks/useRenderRuntime";
 import { useRenderState } from "./renderEngine/hooks";
 import { SpatialTier, InteractionState } from "./renderEngine/types";
 import { requestProgressiveTiers, type TransportArtifact } from "./renderEngine/transport";
 import { DEFAULT_FILMSTRIP_TILE_WIDTH_PX, generateFilmstripSlotTimestamps, getFilmstripTileWidthForTier, getReadableFilmstripTier } from "./filmstripLayout";
+import { generateId } from "@/lib/id";
 
 // ─── Hook ─────────────────────────────────────────────────────────────────────
 
@@ -66,7 +67,7 @@ export interface UseFilmstripResult {
 export function useFilmstrip(opts: UseFilmstripOptions): UseFilmstripResult {
   const { clipId, videoPath, trimIn, trimOut, duration, enabled = true, clipWidthPx, tileWidthPx, stripHeightPx, posterFrame } = opts;
 
-  const runtime = useRenderEngineStore((s) => s.runtime);
+  const runtime = useRenderRuntime();
   const renderState = useRenderState(clipId);
 
   // Extract primitive values to avoid object reference issues in dependencies
@@ -127,7 +128,7 @@ export function useFilmstrip(opts: UseFilmstripOptions): UseFilmstripResult {
     const startTier = SpatialTier.L0;
     const targetTier = getReadableFilmstripTier(tierFromState, tileWidth, stripHeight, window.devicePixelRatio || 1);
     const requestKey = [epochId, trimIn, trimOut, duration, clipWidth, tileWidth, stripHeight, targetTier, timestampsMs.join(",")].join("|");
-    const requestId = crypto.randomUUID();
+    const requestId = generateId("req");
 
     // console.log("[useFilmstrip] Request check", {
     //   requestId,

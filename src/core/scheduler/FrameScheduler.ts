@@ -14,11 +14,11 @@
  * - Progress tracking and telemetry
  */
 
-import type { FrameRequest, FrameResult } from "../resources/types";
+import type { FrameRequest, FrameResult, RenderResourceHandle } from "../resources/types";
 import type { Clip, Track, MediaAsset, Project } from "../../types";
 import { evaluateSceneCached } from "../evaluation/evaluator";
 import { rasterizeScene } from "../render/rasterizer";
-import { getResourceManager } from "../resources/ResourceManager";
+import { getResourceCache } from "../resources/ResourceCache";
 import { getFontLoader } from "../fonts/FontLoader";
 
 /**
@@ -67,6 +67,9 @@ export interface FrameJob {
     resourceLoadTimeMs?: number;
     totalTimeMs?: number;
   };
+
+  /** Resource handles acquired during preload (for release after rasterization) */
+  acquiredResourceHandles: RenderResourceHandle[];
 }
 
 /**
@@ -173,6 +176,7 @@ export class FrameScheduler {
       abortController: new AbortController(),
       createdAt: Date.now(),
       metrics: {},
+      acquiredResourceHandles: [],
     };
 
     this.jobs.set(job.id, job);
@@ -371,17 +375,15 @@ export class FrameScheduler {
     job.startedAt = Date.now();
 
     try {
-      // Check cancellation
-      if (job.cancelled) {
-        throw new Error("Job cancelled");
-      }
+      // ✅ Check before each phase
+      this.throwIfCancelled(job);
 
       // Step 1: Resource loading
       job.status = "loading";
       job.progress = 0.1;
       const resourceStartTime = Date.now();
 
-      // Pre-load resources for this frame
+      // Pre-load resources for this frame (tracks acquired handles on the job)
       await this.preloadResources(job);
 
       // Pre-load fonts for text layers
@@ -389,10 +391,8 @@ export class FrameScheduler {
 
       job.metrics.resourceLoadTimeMs = Date.now() - resourceStartTime;
 
-      // Check cancellation
-      if (job.cancelled) {
-        throw new Error("Job cancelled");
-      }
+      // ✅ Check after async operations
+      this.throwIfCancelled(job);
 
       // Step 2: Evaluation
       job.status = "evaluating";
@@ -404,10 +404,8 @@ export class FrameScheduler {
       job.metrics.evaluationTimeMs = Date.now() - evalStartTime;
       this.stats.totalEvaluationTimeMs += job.metrics.evaluationTimeMs;
 
-      // Check cancellation
-      if (job.cancelled) {
-        throw new Error("Job cancelled");
-      }
+      // ✅ Check after sync work
+      this.throwIfCancelled(job);
 
       // Step 3: Rasterization
       job.status = "rasterizing";
@@ -425,10 +423,8 @@ export class FrameScheduler {
       job.metrics.rasterTimeMs = Date.now() - rasterStartTime;
       this.stats.totalRasterTimeMs += job.metrics.rasterTimeMs;
 
-      // Check cancellation
-      if (job.cancelled) {
-        throw new Error("Job cancelled");
-      }
+      // ✅ Check after async operations
+      this.throwIfCancelled(job);
 
       // Step 4: Output conversion
       job.progress = 0.9;
@@ -470,6 +466,9 @@ export class FrameScheduler {
           break;
       }
 
+      // ✅ Check after async operations
+      this.throwIfCancelled(job);
+
       // Complete
       job.completedAt = Date.now();
       job.metrics.totalTimeMs = job.completedAt - job.startedAt;
@@ -486,31 +485,61 @@ export class FrameScheduler {
       job.progress = 1.0;
       this.stats.completedJobs++;
     } catch (error) {
-      job.status = job.cancelled ? "cancelled" : "failed";
-      job.error = error as Error;
-
-      if (!job.cancelled) {
+      // ✅ Distinguish cancellation from failure
+      if (error instanceof Error && error.message === "Job cancelled") {
+        job.status = "cancelled";
+      } else {
+        job.status = "failed";
+        job.error = error as Error;
         this.stats.failedJobs++;
       }
 
-      if (this.config.debug) {
+      if (this.config.debug && job.status === "failed") {
         console.error(`[Scheduler] Job ${job.id} failed:`, error);
       }
     } finally {
+      // Release all resource handles acquired during preload
+      this.releaseJobResources(job);
+
       this.activeJobs.delete(job.id);
       this.processQueue(); // Process next job
     }
   }
 
   /**
+   * Check if job is cancelled and throw if so.
+   * Centralizes cancellation checking logic.
+   */
+  private throwIfCancelled(job: FrameJob): void {
+    if (job.cancelled || job.abortController.signal.aborted) {
+      throw new Error("Job cancelled");
+    }
+  }
+
+  /**
+   * Release all resource handles acquired by a job.
+   * Called in the finally block of processJob to ensure cleanup.
+   */
+  private releaseJobResources(job: FrameJob): void {
+    if (job.acquiredResourceHandles.length === 0) return;
+
+    const resourceCache = getResourceCache();
+    for (const handle of job.acquiredResourceHandles) {
+      resourceCache.release(handle);
+    }
+    job.acquiredResourceHandles = [];
+  }
+
+  /**
    * Pre-load resources for a frame.
    * Analyzes the scene and pre-loads all media resources.
+   * Tracks acquired handles on the job for release after rasterization.
    */
   private async preloadResources(job: FrameJob): Promise<void> {
     // Evaluate scene to discover required resources
     const scene = evaluateSceneCached(job.request.time, this.clips, this.tracks, this.assets, this.project, this.epoch);
 
-    const resourceManager = getResourceManager();
+    const resourceCache = getResourceCache();
     const loadPromises: Promise<void>[] = [];
 
     // Pre-load all media resources
@@ -534,8 +563,9 @@ export class FrameScheduler {
         const type = layer.mediaType === "video" ? "video-element" : "image-bitmap";
 
         const loadPromise = Promise.race([
-          resourceManager.acquire(layer.sourcePath, type).then(() => {
-            // Resource is now cached; rasterizer will use it via resource manager
+          resourceCache.acquire(layer.sourcePath, type).then((handle) => {
+            // Track acquired handle for release after rasterization
+            job.acquiredResourceHandles.push(handle);
           }),
           new Promise<void>((_, reject) => {
             job.abortController.signal.addEventListener("abort", () => reject(new Error("Job cancelled")), { once: true });

@@ -117,9 +117,14 @@ export async function exportFrameToFile(options: ExportFrameOptions, savePath: s
   const uint8Array = new Uint8Array(arrayBuffer);
 
   // Save via Tauri
-  const { invoke } = await import("@tauri-apps/api/core");
-  await invoke("write_file", {
-    path: savePath,
-    contents: Array.from(uint8Array),
-  });
+  try {
+    const { invoke } = await import("@tauri-apps/api/core");
+    await invoke("write_file", {
+      path: savePath,
+      contents: Array.from(uint8Array),
+    });
+  } catch (err) {
+    console.error("[ExportFrame] Failed to write file:", err);
+    throw err;
+  }
 }

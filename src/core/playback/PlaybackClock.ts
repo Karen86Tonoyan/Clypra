@@ -82,10 +82,10 @@ export class PlaybackClock {
     if (this._state === "playing" && this._audioContext && this._audioContext.state === "running") {
       const elapsed = (this._audioContext.currentTime - this._playStartAudioTime) * this._speed;
       const computedTime = this._playStartClockTime + elapsed;
-      
+
       // Clamp to duration if we've reached the end
       if (computedTime >= this._duration) {
-         return this._duration;
+        return this._duration;
       }
       return computedTime;
     }
@@ -176,7 +176,6 @@ export class PlaybackClock {
    * Start playback.
    */
   play(): void {
-
     if (this._state === "playing") {
       return;
     }
@@ -252,6 +251,9 @@ export class PlaybackClock {
    * This is NOT a React render. This is a continuous signal.
    */
   private _tick(): void {
+    // Safety check: if RAF was cancelled, don't continue
+    if (this._rafId === null) return;
+
     if (this._state !== "playing") return;
 
     // Calculate elapsed time using AudioContext (high precision)
@@ -264,6 +266,7 @@ export class PlaybackClock {
       // Reached end
       this._time = this._duration;
       this._state = "paused";
+      this._rafId = null; // Clear RAF ID when stopping
       this._notifyListeners();
       return;
     }
@@ -305,9 +308,17 @@ export class PlaybackClock {
 
   /**
    * Dispose clock (cleanup).
+   * CRITICAL: Always cancel RAF, regardless of state.
    */
   dispose(): void {
-    this.stop();
+    // ✅ ALWAYS cancel RAF, regardless of state
+    if (this._rafId !== null) {
+      cancelAnimationFrame(this._rafId);
+      this._rafId = null;
+    }
+
+    this._state = "stopped";
+    this._time = 0;
     this._listeners.clear();
 
     if (this._audioContext) {

@@ -16,7 +16,7 @@
  */
 
 import type { EvaluatedScene, EvaluatedMediaLayer, EvaluatedTextLayer } from "../evaluation/types";
-import { getResourceManager } from "../resources/ResourceManager";
+import { getResourceCache } from "../resources/ResourceCache";
 
 /**
  * Raster target configuration.
@@ -186,8 +186,8 @@ async function rasterizeMediaLayer(ctx: CanvasRenderingContext2D | OffscreenCanv
 
     // 2. Try to use pre-resolved resource
     if (layer.resourceHandle) {
-      const resourceManager = getResourceManager();
-      const resource = resourceManager.get(layer.resourceHandle);
+      const resourceCache = getResourceCache();
+      const resource = resourceCache.get(layer.resourceHandle);
 
       if (resource && resource.data instanceof ImageBitmap) {
         imageBitmap = resource.data;

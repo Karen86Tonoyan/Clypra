@@ -23,6 +23,7 @@ interface TimelineState {
     startTime: number;
     [key: string]: any;
   }>;
+  epoch: number;
 }
 
 /**
@@ -50,6 +51,7 @@ export class MoveClipCommand implements Command {
     return {
       ...state,
       clips: state.clips.map((clip) => (clip.id === this.clipId ? { ...clip, trackId: this.toTrackId, startTime: this.toTime } : clip)),
+      epoch: state.epoch + 1, // ✅ Epoch increment inside command
     };
   }
 

@@ -46,19 +46,28 @@ export const ExportDialog: React.FC<ExportDialogProps> = ({ isOpen, onClose }) =
 
   // Check FFmpeg availability on mount
   useEffect(() => {
-    if (isOpen) {
-      exportVideoModule().then((module) => {
-        module.checkFFmpegAvailable().then((available) => {
-          setFfmpegAvailable(available);
-          if (available) {
-            module
-              .getFFmpegVersion()
-              .then(setFfmpegVersion)
-              .catch(() => {});
+    if (!isOpen) return;
+
+    const checkFFmpeg = async () => {
+      try {
+        const module = await exportVideoModule();
+        const available = await module.checkFFmpegAvailable();
+        setFfmpegAvailable(available);
+        if (available) {
+          try {
+            const version = await module.getFFmpegVersion();
+            setFfmpegVersion(version);
+          } catch {
+            // Version detection is non-critical
           }
-        });
-      });
-    }
+        }
+      } catch (err) {
+        console.error("[ExportDialog] FFmpeg check failed:", err);
+        setFfmpegAvailable(false);
+      }
+    };
+
+    checkFFmpeg();
   }, [isOpen]);
 
   const presetConfigs = {

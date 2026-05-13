@@ -301,6 +301,32 @@ const ProgramPreview: React.FC = () => {
   const displayWidth = canvasWidth * scale;
   const displayHeight = canvasHeight * scale;
 
+  // GPU cache initialization — create once, reuse across resizes and state changes.
+  // GPU resources survive layout changes; only disposed on unmount.
+  useEffect(() => {
+    if (!useCanvasPreview || !canvasRef.current || gpuFallbackRef.current) return;
+
+    // Already initialized — reuse existing cache
+    if (gpuCacheRef.current) return;
+
+    try {
+      gpuCacheRef.current = new GPUTextureCache(canvasRef.current);
+    } catch {
+      // WebGL2 unavailable — fall back to Canvas2D permanently
+      gpuFallbackRef.current = true;
+    }
+  }, [useCanvasPreview]);
+
+  // GPU cache disposal — only on unmount
+  useEffect(() => {
+    return () => {
+      if (gpuCacheRef.current) {
+        gpuCacheRef.current.dispose();
+        gpuCacheRef.current = null;
+      }
+    };
+  }, []);
+
   // Canvas rendering - INDEPENDENT RAF LOOP (not tied to React state)
   // GPU-first: uploads ImageBitmaps as WebGL2 textures for zero-copy reuse.
   // Falls back to Canvas2D if WebGL2 is unavailable.
@@ -311,21 +337,9 @@ const ProgramPreview: React.FC = () => {
 
     if (displayWidth === 0 || displayHeight === 0) return;
 
-    // ── Initialize GPU or Canvas2D rendering context ──────────────────
-    let gpuCache: GPUTextureCache | null = null;
+    // ── Resolve rendering context (GPU cache persists across re-runs) ──
+    const gpuCache = gpuCacheRef.current;
     let ctx2d: CanvasRenderingContext2D | null = null;
-
-    if (!gpuFallbackRef.current) {
-      try {
-        gpuCache = new GPUTextureCache(canvas);
-        gpuCacheRef.current = gpuCache;
-        gpuCache.clear();
-      } catch {
-        // WebGL2 unavailable — fall back to Canvas2D
-        gpuFallbackRef.current = true;
-        gpuCache = null;
-      }
-    }
 
     if (!gpuCache) {
       ctx2d = canvas.getContext("2d");
@@ -454,7 +468,7 @@ const ProgramPreview: React.FC = () => {
     // Start render loop
     rafId = requestAnimationFrame(renderLoop);
 
-    // Cleanup
+    // Cleanup: stop render loop and cancel pending jobs (GPU cache survives)
     return () => {
       isActive = false;
       if (rafId !== null) {
@@ -463,29 +477,27 @@ const ProgramPreview: React.FC = () => {
       if (lastJobId) {
         scheduler.cancel(lastJobId);
       }
-      // Dispose GPU cache to release all WebGL textures and context
-      if (gpuCache) {
-        gpuCache.dispose();
-        gpuCacheRef.current = null;
-      }
     };
   }, [useCanvasPreview, clips, tracks, mediaAssets, project, epoch, clock, displayWidth, displayHeight]);
 
   // Video sync - EVENT DRIVEN (only on state changes, not every frame)
   useEffect(() => {
     const currentClockTime = clock.time;
-    const session = getActiveSessionOrNull();
+    const registeredKeys = new Set<string>();
 
     Object.values(videoRefs.current).forEach((video) => {
       if (!video) return;
 
       // Register video element with session for lifecycle management
+      // ✅ Get session NOW (not captured in closure)
+      const session = getActiveSessionOrNull();
       if (session && session.state === "active") {
         const clipId = video.dataset.clipId;
         const mediaId = video.dataset.mediaId;
         if (clipId && mediaId) {
           const key = `${clipId}-${mediaId}`;
           session.registerVideoElement(key, video);
+          registeredKeys.add(key);
         }
       }
 
@@ -536,19 +548,23 @@ const ProgramPreview: React.FC = () => {
       }
     });
 
-    // Cleanup: unregister video elements when effect cleans up
+    // Cleanup: unregister video elements and cleanup DOM resources
     return () => {
-      if (session && session.state === "active") {
-        Object.values(videoRefs.current).forEach((video) => {
-          if (!video) return;
-          const clipId = video.dataset.clipId;
-          const mediaId = video.dataset.mediaId;
-          if (clipId && mediaId) {
-            const key = `${clipId}-${mediaId}`;
-            session.unregisterVideoElement(key);
-          }
+      // ✅ Get session at cleanup time (not from closure)
+      const session = getActiveSessionOrNull();
+      if (session) {
+        registeredKeys.forEach((key) => {
+          session.unregisterVideoElement(key);
         });
       }
+
+      // ✅ ALWAYS cleanup DOM resources, even if session is gone
+      Object.values(videoRefs.current).forEach((video) => {
+        if (!video) return;
+        video.pause();
+        video.src = "";
+        video.load();
+      });
     };
   }, [clockState.state, isMuted, volume, clockState.speed, clips, clock, previewVideoReadyTick, scene.metadata.activeMediaHash]);
 

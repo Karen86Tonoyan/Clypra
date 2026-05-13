@@ -4,7 +4,7 @@
  * This is intent-based history, NOT snapshot-based.
  *
  * Architecture:
- *   User Action → Command → HistoryManager → Timeline State → Epoch++
+ *   User Action → Command → CommandJournal → Timeline State → Epoch++
  *
  * Features:
  * - Command pattern (semantic operations)
@@ -21,9 +21,9 @@ export { generateCommandId } from "./Command";
 // Transaction system
 export { Transaction, TransactionState, CompositeCommand } from "./Transaction";
 
-// History manager
-export { HistoryManager } from "./HistoryManager";
-export type { HistoryConfig, HistoryState } from "./HistoryManager";
+// Command journal
+export { CommandJournal } from "./CommandJournal";
+export type { CommandJournalConfig, CommandJournalState } from "./CommandJournal";
 
 // Commands
 export * from "./commands";

@@ -9,6 +9,8 @@
  * - Serialized (for collaboration/macros)
  */
 
+import { generateId } from "@/lib/id";
+
 /**
  * Base command interface.
  * All timeline operations implement this.
@@ -73,5 +75,5 @@ export interface SerializableCommand extends Command {
  * Generate unique command ID.
  */
 export function generateCommandId(): string {
-  return `cmd-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+  return generateId("cmd");
 }

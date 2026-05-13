@@ -6,4 +6,4 @@
  */
 
 export * from "./types";
-export * from "./ResourceManager";
+export * from "./ResourceCache";

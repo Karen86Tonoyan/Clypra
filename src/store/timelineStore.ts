@@ -23,10 +23,11 @@
 
 import { create } from "zustand";
 import type { Track, Clip } from "@/types";
+import { generateId, getCounter } from "@/lib/id";
 import { useUIStore } from "./uiStore";
 import { useProjectStore } from "./projectStore";
-import { clampTimelinePixelsPerSecond, clampTimelineZoom, TIMELINE_PPS_PER_ZOOM, TIMELINE_ZOOM_DEFAULT } from "@/lib/timelineZoom";
-import { getTimelineContentEnd } from "@/lib/timelineClip";
+import { clampTimelinePixelsPerSecond, clampTimelineZoom, TIMELINE_PPS_PER_ZOOM, TIMELINE_ZOOM_DEFAULT } from "../lib/timelineZoom";
+import { getTimelineContentEnd, normalizeClipTiming } from "@/lib/timelineClip";
 import { autoSaveMiddleware } from "./middleware/autoSaveMiddleware";
 
 interface TimelineStore {
@@ -48,8 +49,18 @@ interface TimelineStore {
   scrollLeft: number;
   pixelsPerSecond: number;
   rippleEditEnabled: boolean;
+  /** @internal Batch nesting depth — do not read directly */
+  _batchDepth: number;
+  /** @internal Deferred epoch flag — do not read directly */
+  _pendingEpochIncrement: boolean;
+  /** Begin a batch of mutations. Epoch increment is deferred until endBatch(). */
+  beginBatch: () => void;
+  /** End a batch. If any mutation requested an epoch increment, it fires now. */
+  endBatch: () => void;
   /** Increment epoch (for cache invalidation) */
   incrementEpoch: () => void;
+  /** Hydrate timeline state from project load (atomic operation) */
+  hydrateFromProject: (payload: { tracks?: any[]; clips?: any[] }) => void;
   addTrack: (type: "video" | "audio" | "text") => void;
   /** Inserts a track at index (clamped); returns the new track id. */
   insertTrackAt: (type: "video" | "audio" | "text", index: number) => string;
@@ -104,16 +115,60 @@ export const useTimelineStore = create<TimelineStore>(
     scrollLeft: 0,
     pixelsPerSecond: TIMELINE_ZOOM_DEFAULT * TIMELINE_PPS_PER_ZOOM,
     rippleEditEnabled: false,
+    _batchDepth: 0,
+    _pendingEpochIncrement: false,
+
+    beginBatch: () => {
+      set((state) => ({ _batchDepth: state._batchDepth + 1 }));
+    },
+
+    endBatch: () => {
+      set((state) => {
+        const newDepth = Math.max(0, state._batchDepth - 1);
+        if (newDepth === 0 && state._pendingEpochIncrement) {
+          return { _batchDepth: 0, _pendingEpochIncrement: false, epoch: state.epoch + 1 };
+        }
+        return { _batchDepth: newDepth };
+      });
+    },
 
     incrementEpoch: () => {
-      set((state) => ({ epoch: state.epoch + 1 }));
+      set((state) => {
+        if (state._batchDepth > 0) {
+          return { _pendingEpochIncrement: true };
+        }
+        return { epoch: state.epoch + 1 };
+      });
+    },
+
+    hydrateFromProject: (payload) => {
+      const finalTracks = payload?.tracks ?? [];
+      const finalClipsRaw = payload?.clips ?? [];
+
+      // Normalize clip timing with media asset data
+      const mediaAssets = useProjectStore.getState().mediaAssets;
+
+      const normalizedClips = finalClipsRaw.map((clip: Clip) => {
+        const asset = mediaAssets.find((a) => a.id === clip.mediaId);
+        return normalizeClipTiming(clip, asset);
+      });
+
+      // Atomic state update - all or nothing
+      set({
+        tracks: finalTracks,
+        clips: normalizedClips,
+        scrollLeft: 0,
+        zoomLevel: TIMELINE_ZOOM_DEFAULT,
+        pixelsPerSecond: TIMELINE_ZOOM_DEFAULT * TIMELINE_PPS_PER_ZOOM,
+        epoch: 0, // Reset epoch on project load
+      });
     },
 
     addTrack: (type) => {
       const newTrack: Track = {
-        id: `track-${Date.now()}`,
+        id: generateId("track"),
         type,
-        name: `${type.charAt(0).toUpperCase() + type.slice(1)} ${Date.now() % 100}`,
+        name: `${type.charAt(0).toUpperCase() + type.slice(1)} ${getCounter() % 100}`,
         muted: false,
         locked: false,
         visible: true,
@@ -127,9 +182,9 @@ export const useTimelineStore = create<TimelineStore>(
 
     insertTrackAt: (type, index) => {
       const newTrack: Track = {
-        id: `track-${Date.now()}`,
+        id: generateId("track"),
         type,
-        name: `${type.charAt(0).toUpperCase() + type.slice(1)} ${Date.now() % 100}`,
+        name: `${type.charAt(0).toUpperCase() + type.slice(1)} ${getCounter() % 100}`,
         muted: false,
         locked: false,
         visible: true,
@@ -180,24 +235,45 @@ export const useTimelineStore = create<TimelineStore>(
     },
 
     removeClip: (clipId) => {
-      set((state) => ({
-        clips: state.clips.filter((c) => c.id !== clipId),
-        epoch: state.epoch + 1,
-      }));
+      set((state) => {
+        const next: Partial<TimelineStore> = {
+          clips: state.clips.filter((c) => c.id !== clipId),
+        };
+        if (state._batchDepth > 0) {
+          next._pendingEpochIncrement = true;
+        } else {
+          next.epoch = state.epoch + 1;
+        }
+        return next;
+      });
     },
 
     updateClip: (clipId, updates) => {
-      set((state) => ({
-        clips: state.clips.map((c) => (c.id === clipId ? { ...c, ...updates } : c)),
-        epoch: state.epoch + 1,
-      }));
+      set((state) => {
+        const next: Partial<TimelineStore> = {
+          clips: state.clips.map((c) => (c.id === clipId ? { ...c, ...updates } : c)),
+        };
+        if (state._batchDepth > 0) {
+          next._pendingEpochIncrement = true;
+        } else {
+          next.epoch = state.epoch + 1;
+        }
+        return next;
+      });
     },
 
     moveClip: (clipId, startTime) => {
-      set((state) => ({
-        clips: state.clips.map((c) => (c.id === clipId ? { ...c, startTime } : c)),
-        epoch: state.epoch + 1,
-      }));
+      set((state) => {
+        const next: Partial<TimelineStore> = {
+          clips: state.clips.map((c) => (c.id === clipId ? { ...c, startTime } : c)),
+        };
+        if (state._batchDepth > 0) {
+          next._pendingEpochIncrement = true;
+        } else {
+          next.epoch = state.epoch + 1;
+        }
+        return next;
+      });
     },
 
     setPixelsPerSecond: (pps) => {

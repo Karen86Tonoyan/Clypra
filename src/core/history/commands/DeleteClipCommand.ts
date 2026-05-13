@@ -8,6 +8,7 @@ import type { Clip } from "../../../types";
 
 interface TimelineState {
   clips: Clip[];
+  epoch: number;
 }
 
 export class DeleteClipCommand implements Command {
@@ -31,6 +32,7 @@ export class DeleteClipCommand implements Command {
     return {
       ...state,
       clips: state.clips.filter((c) => c.id !== this.clipId),
+      epoch: state.epoch + 1, // ✅ Epoch increment inside command
     };
   }
 
@@ -75,6 +77,7 @@ export class AddClipCommand implements Command {
     return {
       ...state,
       clips: [...state.clips, this.clip],
+      epoch: state.epoch + 1, // ✅ Epoch increment inside command
     };
   }
 

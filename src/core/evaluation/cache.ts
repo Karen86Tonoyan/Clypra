@@ -30,6 +30,8 @@ interface CacheKey {
 interface CacheEntry {
   key: CacheKey;
   scene: EvaluatedScene;
+  /** Estimated memory footprint in MB */
+  memoryMB: number;
   timestamp: number;
   hits: number;
 }
@@ -40,11 +42,14 @@ interface CacheEntry {
 export class EvaluationCache {
   private cache = new Map<string, CacheEntry>();
   private maxSize: number;
+  private maxMemoryMB: number;
+  private currentMemoryMB = 0;
   private hits = 0;
   private misses = 0;
 
-  constructor(maxSize: number = 100) {
+  constructor(maxSize: number = 100, maxMemoryMB: number = 64) {
     this.maxSize = maxSize;
+    this.maxMemoryMB = maxMemoryMB;
   }
 
   /**
@@ -76,22 +81,34 @@ export class EvaluationCache {
    */
   set(key: CacheKey, scene: EvaluatedScene): void {
     const cacheKey = this.serializeKey(key);
+    const memoryMB = this.estimateSceneMemory(scene);
 
-    // Remove oldest entry if cache is full
-    if (this.cache.size >= this.maxSize && !this.cache.has(cacheKey)) {
-      const firstKey = this.cache.keys().next().value;
-      if (firstKey) {
-        this.cache.delete(firstKey);
-      }
+    // If updating an existing entry, subtract its old memory first
+    const existing = this.cache.get(cacheKey);
+    if (existing) {
+      this.currentMemoryMB -= existing.memoryMB;
+      this.cache.delete(cacheKey);
+    }
+
+    // Evict LRU entries until within memory budget
+    while (this.currentMemoryMB + memoryMB > this.maxMemoryMB && this.cache.size > 0) {
+      this.evictLRU();
+    }
+
+    // Evict LRU entries until within count budget
+    while (this.cache.size >= this.maxSize) {
+      this.evictLRU();
     }
 
     // Add new entry
     this.cache.set(cacheKey, {
       key,
       scene,
+      memoryMB,
       timestamp: Date.now(),
       hits: 0,
     });
+    this.currentMemoryMB += memoryMB;
   }
 
   /**
@@ -106,7 +123,13 @@ export class EvaluationCache {
       }
     }
 
-    toDelete.forEach((key) => this.cache.delete(key));
+    for (const key of toDelete) {
+      const entry = this.cache.get(key);
+      if (entry) {
+        this.currentMemoryMB -= entry.memoryMB;
+      }
+      this.cache.delete(key);
+    }
   }
 
   /**
@@ -114,6 +137,7 @@ export class EvaluationCache {
    */
   clear(): void {
     this.cache.clear();
+    this.currentMemoryMB = 0;
     this.hits = 0;
     this.misses = 0;
   }
@@ -128,6 +152,8 @@ export class EvaluationCache {
     return {
       size: this.cache.size,
       maxSize: this.maxSize,
+      memoryMB: Math.round(this.currentMemoryMB * 1e6) / 1e6,
+      maxMemoryMB: this.maxMemoryMB,
       hits: this.hits,
       misses: this.misses,
       hitRate: hitRate.toFixed(2) + "%",
@@ -135,8 +161,40 @@ export class EvaluationCache {
   }
 
   /**
-   * Serialize cache key to string.
+   * Estimate memory footprint of a scene in MB.
+   * ~1 KB per visual layer, ~0.5 KB per audio layer, + base overhead.
    */
+  private estimateSceneMemory(scene: EvaluatedScene): number {
+    const visualBytes = scene.visualLayers.length * 1024;
+    const audioBytes = scene.audioLayers.length * 512;
+    const transitionBytes = scene.transitions.length * 256;
+    const baseOverhead = 1024; // metadata + object overhead
+    return (visualBytes + audioBytes + transitionBytes + baseOverhead) / (1024 * 1024);
+  }
+
+  /**
+   * Evict the least recently used entry.
+   */
+  private evictLRU(): void {
+    let oldestKey: string | null = null;
+    let oldestTime = Infinity;
+
+    for (const [key, entry] of this.cache.entries()) {
+      if (entry.timestamp < oldestTime) {
+        oldestTime = entry.timestamp;
+        oldestKey = key;
+      }
+    }
+
+    if (oldestKey) {
+      const entry = this.cache.get(oldestKey);
+      if (entry) {
+        this.currentMemoryMB -= entry.memoryMB;
+      }
+      this.cache.delete(oldestKey);
+    }
+  }
+
   private serializeKey(key: CacheKey): string {
     // Round time to 3 decimal places (millisecond precision)
     const roundedTime = Math.round(key.time * 1000) / 1000;
@@ -172,10 +230,15 @@ export function resetEvaluationCache(): void {
  * Changes when clips are added/removed/modified.
  */
 export function computeClipVersion(clips: Array<{ id: string; startTime: number; duration: number; trackId: string }>): string {
-  // Simple hash: concatenate clip IDs and positions
+  // Stable sort with deterministic tie-breaker, then hash
   const signature = clips
+    .slice()
+    .sort((a, b) => {
+      if (a.startTime !== b.startTime) return a.startTime - b.startTime;
+      if (a.trackId !== b.trackId) return a.trackId.localeCompare(b.trackId);
+      return a.id.localeCompare(b.id);
+    })
     .map((c) => `${c.id}:${c.trackId}:${c.startTime.toFixed(3)}:${c.duration.toFixed(3)}`)
-    .sort()
     .join("|");
 
   // Use a simple hash function

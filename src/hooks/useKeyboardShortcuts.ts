@@ -71,14 +71,8 @@ export const useKeyboardShortcuts = () => {
         redo();
       } else if (isMeta && e.key === "s") {
         e.preventDefault();
-        // Manual save
-        const { project, mediaAssets, scheduleAutoSave } = useProjectStore.getState();
-        if (project) {
-          // Clear auto-save timer and save immediately
-          scheduleAutoSave();
-          setToastMessage("Project saved");
-          setTimeout(() => setToastMessage(null), 2000);
-        }
+        // Cmd+S: Auto-save handles saving automatically, no manual action needed
+        // Just prevent browser's default save dialog
       } else if (isMeta && e.key === "i") {
         e.preventDefault();
       } else if (isMeta && e.shiftKey && e.key === "S") {

@@ -47,6 +47,8 @@
 
 import { getPlaybackClock, PlaybackClock } from "../playback/PlaybackClock";
 import { getFrameScheduler, FrameScheduler } from "../scheduler/FrameScheduler";
+import { RenderEngine } from "@/lib/renderEngine/renderEngine";
+import { QualityPreset, RendererMode, type SrpConfig } from "@/lib/renderEngine/types";
 
 /**
  * Project Session State
@@ -59,23 +61,6 @@ export type SessionState = "initializing" | "active" | "disposing" | "disposed";
 export type SessionEventType = "initialized" | "disposed" | "error";
 export type SessionEventListener = (event: { type: SessionEventType; session: ProjectSession; error?: Error }) => void;
 
-/**
- * Project Session - Disposable runtime container.
- *
- * Owns all project-scoped runtime state:
- * - Playback clock
- * - Frame scheduler
- * - Render caches
- * - Evaluation state
- * - Media resources
- * - UI selections
- *
- * Lifecycle:
- * 1. Create: new ProjectSession(projectId)
- * 2. Initialize: await session.initialize()
- * 3. Use: session.playback, session.scheduler, etc.
- * 4. Dispose: await session.dispose()
- */
 export class ProjectSession {
   // Session identity
   public readonly projectId: string;
@@ -85,6 +70,7 @@ export class ProjectSession {
   // Owned subsystems (created on initialize, destroyed on dispose)
   private _playback: PlaybackClock | null = null;
   private _scheduler: FrameScheduler | null = null;
+  private _renderRuntime: RenderEngine | null = null;
 
   // Lifecycle tracking
   private _initializePromise: Promise<void> | null = null;
@@ -121,6 +107,13 @@ export class ProjectSession {
     return this._scheduler;
   }
 
+  get renderRuntime(): RenderEngine {
+    if (!this._renderRuntime) {
+      throw new Error(`[ProjectSession] RenderEngine not initialized. Call initialize() first.`);
+    }
+    return this._renderRuntime;
+  }
+
   // ─── Lifecycle ──────────────────────────────────────────────────────────
 
   /**
@@ -145,6 +138,13 @@ export class ProjectSession {
       // Use global singletons (single clock/scheduler ensures no divergence)
       this._playback = getPlaybackClock();
       this._scheduler = getFrameScheduler();
+
+      // Create RenderEngine (session-owned, not singleton)
+      // Each project gets its own render engine with isolated GPU resources
+      this._renderRuntime = new RenderEngine(this.projectId, {
+        qualityPreset: QualityPreset.Medium,
+        rendererMode: RendererMode.Canvas2D,
+      });
 
       // Initialize stores (timeline, UI)
       await this._initializeStores();
@@ -197,14 +197,20 @@ export class ProjectSession {
       // 4. Release media resources (video elements, audio nodes)
       await this._releaseMediaResources();
 
-      // 5. Cancel all RAF loops
+      // 5. Teardown render runtime (GPU resources, WebGL contexts)
+      if (this._renderRuntime) {
+        this._renderRuntime.teardown();
+        this._renderRuntime = null;
+      }
+
+      // 6. Cancel all RAF loops
       this._cancelRAFLoops();
 
-      // 6. Release references to global singletons (actual disposal handled by destroyRuntime)
+      // 7. Release references to global singletons (actual disposal handled by destroyRuntime)
       this._playback = null;
       this._scheduler = null;
 
-      // 7. Reset stores
+      // 8. Reset stores
       await this._resetStores();
 
       this._state = "disposed";

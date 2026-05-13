@@ -5,6 +5,7 @@
  */
 
 import type { TextClip } from "../types";
+import { generateId } from "./id";
 
 export interface CreateTextClipOptions {
   /** Track ID to place the clip on */
@@ -52,7 +53,7 @@ export function createTextClip(options: CreateTextClipOptions): TextClip {
   const { x, y, width, height } = calculateTextPosition(position, canvasWidth, canvasHeight, fontSize);
 
   return {
-    id: `text-clip-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+    id: generateId("text-clip"),
     trackId,
     mediaId: "", // Text clips don't have media assets
     startTime,

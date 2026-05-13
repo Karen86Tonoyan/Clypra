@@ -1,5 +1,5 @@
 /**
- * Media Resource Manager
+ * Media Resource Cache
  *
  * Manages lifecycle of decoded media resources.
  * Separates asset acquisition from rasterization.
@@ -32,10 +32,10 @@ export interface ResourceManagerConfig {
 }
 
 /**
- * Media resource manager.
+ * Media resource cache.
  * Handles decode, caching, and lifecycle of media resources.
  */
-export class ResourceManager {
+export class ResourceCache {
   private resources = new Map<RenderResourceHandle, RenderResource>();
   private config: Required<ResourceManagerConfig>;
   private currentCacheSizeBytes = 0;
@@ -287,26 +287,26 @@ export class ResourceManager {
 }
 
 /**
- * Global resource manager instance.
+ * Global resource cache instance.
  */
-let globalResourceManager: ResourceManager | null = null;
+let globalResourceCache: ResourceCache | null = null;
 
 /**
- * Get or create global resource manager.
+ * Get or create global resource cache.
  */
-export function getResourceManager(): ResourceManager {
-  if (!globalResourceManager) {
-    globalResourceManager = new ResourceManager();
+export function getResourceCache(): ResourceCache {
+  if (!globalResourceCache) {
+    globalResourceCache = new ResourceCache();
   }
-  return globalResourceManager;
+  return globalResourceCache;
 }
 
 /**
- * Reset global resource manager (for testing).
+ * Reset global resource cache (for testing).
  */
-export function resetResourceManager(): void {
-  if (globalResourceManager) {
-    globalResourceManager.clear();
+export function resetResourceCache(): void {
+  if (globalResourceCache) {
+    globalResourceCache.clear();
   }
-  globalResourceManager = null;
+  globalResourceCache = null;
 }

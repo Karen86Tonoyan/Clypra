@@ -15,10 +15,13 @@
  * - Directly mutate timeline (commands do that)
  * - Own timeline state (timelineStore is source of truth)
  * - Manage runtime resources (ProjectSession handles that)
+ * - Increment epoch (commands handle that internally)
+ * - Trigger auto-save (middleware handles that automatically)
  *
  * Architecture principle:
- * Commands are the single mutation path for timeline state.
- * This enables:
+ * Commands are pure state transformers: (state) => newState
+ * All side effects (epoch increment, auto-save) are encapsulated within commands
+ * or handled by middleware. This enables:
  * - Deterministic undo/redo
  * - Command replay for testing
  * - Future: collaborative editing (commands as CRDT operations)
@@ -27,21 +30,20 @@
  * Bridges the command-based history system with Zustand state management.
  *
  * Architecture:
- *   UI Action → historyStore.execute() → HistoryManager → timelineStore
+ *   UI Action → historyStore.execute() → CommandJournal → Command.apply() → timelineStore
  */
 
 import { create } from "zustand";
-import { HistoryManager } from "@/core/history";
-import type { Command, HistoryState } from "@/core/history";
+import { CommandJournal } from "@/core/history";
+import type { Command, CommandJournalState } from "@/core/history";
 import { useTimelineStore } from "./timelineStore";
-import { useProjectStore } from "./projectStore";
 
 interface HistoryStore {
-  // History manager instance
-  manager: HistoryManager;
+  // Command journal instance
+  journal: CommandJournal;
 
   // Current history state
-  state: HistoryState;
+  state: CommandJournalState;
 
   // Execute a command
   execute: (command: Command) => void;
@@ -65,105 +67,87 @@ interface HistoryStore {
   clear: () => void;
 }
 
-// Create history manager instance
-const historyManager = new HistoryManager({
+// Create command journal instance
+const commandJournal = new CommandJournal({
   maxSize: 100,
   enableCoalescing: true,
   coalescingWindowMs: 500,
 });
 
 export const useHistoryStore = create<HistoryStore>((set, get) => {
-  // Subscribe to history manager changes
-  historyManager.subscribe((state) => {
+  // Subscribe to command journal changes
+  commandJournal.subscribe((state) => {
     set({ state });
   });
 
   return {
-    manager: historyManager,
-    state: historyManager.getState(),
+    journal: commandJournal,
+    state: commandJournal.getState(),
 
     execute: (command) => {
-      const { manager } = get();
+      const { journal } = get();
 
       // Get current timeline state
       const timelineStore = useTimelineStore.getState();
 
-      // Execute command
-      const newState = manager.execute(command, timelineStore);
+      // Execute command (command handles epoch increment internally)
+      const newState = journal.execute(command, timelineStore);
 
-      // Update timeline store
+      // Update timeline store (auto-save triggered by middleware)
       useTimelineStore.setState(newState);
-
-      // Increment epoch for cache invalidation
-      useTimelineStore.getState().incrementEpoch();
-
-      // Trigger auto-save
-      useProjectStore.getState().scheduleAutoSave();
     },
 
     undo: () => {
-      const { manager } = get();
+      const { journal } = get();
 
-      if (!manager.canUndo()) return;
+      if (!journal.canUndo()) return;
 
       // Get current timeline state
       const timelineStore = useTimelineStore.getState();
 
-      // Undo
-      const newState = manager.undo(timelineStore);
+      // Undo (inverse command handles epoch increment internally)
+      const newState = journal.undo(timelineStore);
 
-      // Update timeline store
+      // Update timeline store (auto-save triggered by middleware)
       useTimelineStore.setState(newState);
-
-      // Increment epoch for cache invalidation
-      useTimelineStore.getState().incrementEpoch();
-
-      // Trigger auto-save
-      useProjectStore.getState().scheduleAutoSave();
     },
 
     redo: () => {
-      const { manager } = get();
+      const { journal } = get();
 
-      if (!manager.canRedo()) return;
+      if (!journal.canRedo()) return;
 
       // Get current timeline state
       const timelineStore = useTimelineStore.getState();
 
-      // Redo
-      const newState = manager.redo(timelineStore);
+      // Redo (command handles epoch increment internally)
+      const newState = journal.redo(timelineStore);
 
-      // Update timeline store
+      // Update timeline store (auto-save triggered by middleware)
       useTimelineStore.setState(newState);
-
-      // Increment epoch for cache invalidation
-      useTimelineStore.getState().incrementEpoch();
-
-      // Trigger auto-save
-      useProjectStore.getState().scheduleAutoSave();
     },
 
     beginTransaction: (label) => {
-      const { manager } = get();
-      manager.beginTransaction(label);
+      const { journal } = get();
+      journal.beginTransaction(label);
     },
 
     commitTransaction: () => {
-      const { manager } = get();
+      const { journal } = get();
       const timelineStore = useTimelineStore.getState();
-      manager.commitTransaction(timelineStore);
+      journal.commitTransaction(timelineStore);
     },
 
     rollbackTransaction: () => {
-      const { manager } = get();
+      const { journal } = get();
       const timelineStore = useTimelineStore.getState();
-      const newState = manager.rollbackTransaction(timelineStore);
+      const newState = journal.rollbackTransaction(timelineStore);
       useTimelineStore.setState(newState);
     },
 
     clear: () => {
-      const { manager } = get();
-      manager.clear();
+      const { journal } = get();
+      journal.clear();
     },
   };
 });
