@@ -160,6 +160,19 @@ const ProgramPreview: React.FC = () => {
   const droppedFramesRef = useRef(0);
   const maxDriftRef = useRef(0);
 
+  // Track original canvas dimensions when project loads
+  const originalCanvasDimsRef = useRef<{ width: number; height: number } | null>(null);
+
+  useEffect(() => {
+    if (project && !originalCanvasDimsRef.current) {
+      // Store original dimensions on first load
+      originalCanvasDimsRef.current = {
+        width: project.canvasWidth,
+        height: project.canvasHeight,
+      };
+    }
+  }, [project?.id]); // Only run when project changes
+
   // Sync preview aspect preset with project aspect ratio when project loads
   useEffect(() => {
     if (project?.aspectRatio) {
@@ -649,17 +662,25 @@ const ProgramPreview: React.FC = () => {
     setPreviewAspectPreset(p);
     setAspectMenuOpen(false);
 
-    // Update project canvas dimensions if not "original"
-    if (p !== "original" && project) {
+    if (!project) return;
+
+    // Handle "original" - restore to original canvas dimensions
+    if (p === "original") {
+      if (originalCanvasDimsRef.current) {
+        updateProject({
+          canvasWidth: originalCanvasDimsRef.current.width,
+          canvasHeight: originalCanvasDimsRef.current.height,
+          aspectRatio: "original",
+        });
+      }
+    } else {
+      // Update to preset dimensions
       const dims = CANVAS_DIMENSIONS[p];
       updateProject({
         canvasWidth: dims.width,
         canvasHeight: dims.height,
         aspectRatio: p,
       });
-
-      // Optional: Show toast notification
-      // showToast(`Canvas resized to ${dims.width}×${dims.height} (${p})`);
     }
   };
 
