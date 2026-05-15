@@ -1,13 +1,11 @@
 import React, { useState, useCallback, useMemo } from "react";
-import { CloudUpload, Music, Film, Image, Plus } from "lucide-react";
-// @ts-ignore - react-dnd types issue
-import { useDrag } from "react-dnd";
+import { CloudUpload } from "lucide-react";
 import { invoke } from "@tauri-apps/api/core";
 import { convertFileSrc } from "@tauri-apps/api/core";
+
 import { Button } from "@/components/ui/Button";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { ContextMenu } from "@/components/ui/ContextMenu";
-import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/Tooltip";
 import { useMediaImport } from "@/hooks/useMediaImport";
 import { useFileDrop } from "@/hooks/useFileDrop";
 import { useProjectStore } from "@/store/projectStore";
@@ -16,7 +14,8 @@ import { useTimelineStore } from "@/store/timelineStore";
 import type { VideoMetadata } from "@/types";
 import type { MediaTabProps } from "./types";
 import { generateId } from "@/lib/id";
-import { MediaCardWaveform } from "./MediaCardWaveform";
+import { SuccessToast } from "@/components/ui/SuccessToast";
+import { MediaCard } from "@/components/ui/MediaCard";
 
 export const MediaTab: React.FC<MediaTabProps> = ({ onAddToTimeline }) => {
   const { mediaAssets, removeMediaAsset, addMediaAsset } = useProjectStore();
@@ -168,105 +167,7 @@ export const MediaTab: React.FC<MediaTabProps> = ({ onAddToTimeline }) => {
         />
       )}
 
-      {/* Toast notifications */}
-      {toastMessage && (
-        <div className={`fixed bottom-4 right-4 z-50 max-w-md rounded-lg shadow-lg transition-all duration-300 ${toastMessage.type === "warning" ? "bg-gradient-to-br from-yellow-500 to-orange-500" : "bg-gradient-to-br from-green-500 to-emerald-600"}`} role="alert">
-          <div className="flex items-start gap-3 p-4">
-            <div className="shrink-0 mt-0.5">
-              {toastMessage.type === "warning" ? (
-                <svg className="w-5 h-5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-                </svg>
-              ) : (
-                <svg className="w-5 h-5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                </svg>
-              )}
-            </div>
-            <div className="flex-1 min-w-0">
-              <p className="text-sm font-medium text-white">{toastMessage.type === "warning" ? "Warning" : "Success"}</p>
-              <p className="mt-1 text-sm text-white/90">{toastMessage.message}</p>
-            </div>
-            <button onClick={clearToast} className="shrink-0 ml-2 text-white/80 hover:text-white transition-colors">
-              <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-              </svg>
-            </button>
-          </div>
-        </div>
-      )}
-    </div>
-  );
-};
-
-// MediaCard Component
-interface MediaCardProps {
-  asset: any;
-  isSelected: boolean;
-  isUsedInTimeline: boolean;
-  onClick: () => void;
-  onContextMenu: (e: React.MouseEvent) => void;
-  onAddToTimeline: () => void;
-}
-
-const MediaCard: React.FC<MediaCardProps> = ({ asset, isSelected, isUsedInTimeline, onClick, onContextMenu, onAddToTimeline }) => {
-  const { previewAsset } = useUIStore();
-
-  const [{ isDragging }, drag] = useDrag(() => ({
-    type: "MEDIA_ASSET",
-    item: { type: "MEDIA_ASSET", asset },
-    collect: (monitor: any) => ({
-      isDragging: monitor.isDragging(),
-    }),
-  }));
-
-  const handleClick = () => {
-    onClick(); // Keep selection state
-    previewAsset(asset); // Switch to source preview
-
-    // Switch transport authority to source context
-    import("@/core/runtime/ProjectSession").then(({ getActiveSessionOrNull }) => {
-      const session = getActiveSessionOrNull();
-      session?.transportAuthority?.setActiveContext("source");
-    });
-  };
-
-  return (
-    <div ref={drag as unknown as React.Ref<HTMLDivElement>} onClick={handleClick} onContextMenu={onContextMenu} className={`group relative bg-surface-raised rounded overflow-hidden transition-all cursor-pointer ${isDragging ? "opacity-50" : ""} ${isSelected ? "ring-1 ring-accent" : ""}`}>
-      <div className="aspect-video bg-surface-raised flex items-center justify-center relative">
-        {asset.type === "video" && asset.posterFrame && !/\.(mp4|mov|avi|mkv|webm|flv)(%|$)/i.test(asset.posterFrame) ? <img src={asset.posterFrame} alt={asset.name} className="w-full h-full object-contain" /> : asset.type === "audio" ? <MediaCardWaveform audioPath={asset.path.startsWith("asset://") ? asset.path : convertFileSrc(asset.path)} duration={asset.duration} className="w-full h-full" /> : <div className="w-8 h-8">{asset.type === "video" ? <Film className="w-full h-full text-text-muted" /> : <Image className="w-full h-full text-text-muted" />}</div>}
-        {asset.duration > 0 && (
-          <div className="absolute bottom-1 right-1 bg-black/70 px-1.5 py-0.5 rounded text-xs text-white">
-            {Math.floor(Math.ceil(asset.duration) / 60)}:{String(Math.ceil(asset.duration) % 60).padStart(2, "0")}
-          </div>
-        )}
-        {/* "Added" badge */}
-        {isUsedInTimeline && (
-          <div className="absolute top-1 left-1 bg-purple-950/80 px-1 py-px rounded-[2px] text-[8px] text-white flex items-center gap-1">
-            <span>Added</span>
-          </div>
-        )}
-      </div>
-      <div className="px-1 py-0.5">
-        <p className="text-[10px] font-medium text-text-primary truncate">{asset.name}</p>
-      </div>
-
-      <Tooltip>
-        <TooltipTrigger asChild>
-          <button
-            onClick={(e) => {
-              e.stopPropagation();
-              onAddToTimeline();
-            }}
-            className="hidden group-hover:flex bg-accent hover:bg-accent/90 w-5 h-5 rounded-full justify-center items-center absolute top-1 right-1 transition-colors"
-          >
-            <Plus size={14} className="text-white" />
-          </button>
-        </TooltipTrigger>
-        <TooltipContent side="top">
-          <p>Add to Timeline</p>
-        </TooltipContent>
-      </Tooltip>
+      <SuccessToast message={toastMessage?.message ?? null} variant={toastMessage?.type ?? "success"} onDismiss={clearToast} />
     </div>
   );
 };

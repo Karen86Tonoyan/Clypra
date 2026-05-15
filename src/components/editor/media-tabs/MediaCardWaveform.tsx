@@ -131,19 +131,12 @@ export const MediaCardWaveform: React.FC<MediaCardWaveformProps> = ({ audioPath,
       const barHeight = Math.max(minHeight, value * maxHeight);
 
       const x = i * barWidth + barGap / 2;
-      const y = (rect.height - barHeight) / 2;
+      const y = rect.height - barHeight;
 
       ctx.fillStyle = `rgba(${accentRgb.r}, ${accentRgb.g}, ${accentRgb.b}, 0.85)`;
       drawRoundedRect(ctx, x, y, actualBarWidth, barHeight, 1);
     }
   }, [waveformData, themeRevision]);
-
-  // Format duration as MM:SS
-  const formatDuration = (seconds: number): string => {
-    const mins = Math.floor(seconds / 60);
-    const secs = Math.floor(seconds % 60);
-    return `${String(mins).padStart(2, "0")}:${String(secs).padStart(2, "0")}`;
-  };
 
   return (
     <div className={`relative w-full h-full flex flex-col items-center justify-center ${className}`}>
@@ -160,9 +153,6 @@ export const MediaCardWaveform: React.FC<MediaCardWaveformProps> = ({ audioPath,
           </div>
         </div>
       )}
-
-      {/* Duration overlay */}
-      {!isLoading && <div className="absolute top-2 right-2 bg-black/70 backdrop-blur-sm px-2 py-1 rounded text-xs font-mono text-white">{formatDuration(duration)}</div>}
     </div>
   );
 };
