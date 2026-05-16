@@ -22,7 +22,7 @@ interface TransformOverlayProps {
 }
 
 export const TransformOverlay: React.FC<TransformOverlayProps> = ({ canvasWidth, canvasHeight, scale }) => {
-  const { selectedClipIds, activeTransform, startTransform, updateTransform, endTransform } = useUIStore();
+  const { selectedClipIds, activeTransform, startTransform, endTransform, selectClip } = useUIStore();
   const { clips, updateClip } = useTimelineStore();
   const { execute } = useHistoryStore();
 
@@ -31,6 +31,39 @@ export const TransformOverlay: React.FC<TransformOverlayProps> = ({ canvasWidth,
 
   // Get the first selected clip (multi-select transform comes later)
   const selectedClip = clips.find((c) => c.id === selectedClipIds[0]);
+
+  // Handle click on canvas to select clips
+  const handleCanvasClick = useCallback(
+    (e: React.MouseEvent) => {
+      // Don't handle if clicking on a handle or during drag
+      if (isDragging || (e.target as HTMLElement).closest("[data-transform-handle]")) {
+        return;
+      }
+
+      const rect = overlayRef.current?.getBoundingClientRect();
+      if (!rect) return;
+
+      // Convert screen coordinates to canvas coordinates
+      const clickX = (e.clientX - rect.left) / scale;
+      const clickY = (e.clientY - rect.top) / scale;
+
+      // Find all clips at this position (reverse order = top to bottom)
+      const clipsAtPoint = [...clips]
+        .reverse() // Top clips first
+        .filter((clip) => {
+          return clickX >= clip.x && clickX <= clip.x + clip.width && clickY >= clip.y && clickY <= clip.y + clip.height;
+        });
+
+      if (clipsAtPoint.length > 0) {
+        // Select the topmost clip
+        selectClip(clipsAtPoint[0].id);
+      } else {
+        // Clicked on empty area - deselect
+        selectClip(null);
+      }
+    },
+    [clips, scale, isDragging, selectClip],
+  );
 
   const handleMouseDown = useCallback(
     (e: React.MouseEvent, handle: TransformHandle) => {
@@ -140,15 +173,17 @@ export const TransformOverlay: React.FC<TransformOverlayProps> = ({ canvasWidth,
   return (
     <div
       ref={overlayRef}
-      className="absolute inset-0 pointer-events-none"
+      className="absolute inset-0 pointer-events-auto z-50"
       style={{
         width: canvasWidth * scale,
         height: canvasHeight * scale,
       }}
+      onClick={handleCanvasClick}
     >
       {/* Transform border */}
       <div
-        className="absolute border-2 border-white pointer-events-auto cursor-move"
+        className="absolute border-2 border-white pointer-events-auto cursor-move shadow-lg"
+        data-transform-handle="move"
         style={{
           left: displayX,
           top: displayY,
@@ -156,6 +191,7 @@ export const TransformOverlay: React.FC<TransformOverlayProps> = ({ canvasWidth,
           height: displayHeight,
           transform: `rotate(${rotation}deg)`,
           transformOrigin: "center",
+          boxShadow: "0 0 0 1px rgba(0,0,0,0.5), 0 2px 8px rgba(0,0,0,0.3)",
         }}
         onMouseDown={(e) => handleMouseDown(e, "move")}
       >
@@ -187,13 +223,15 @@ const Handle: React.FC<HandleProps> = ({ position, onMouseDown }) => {
   const getHandleStyle = (): React.CSSProperties => {
     const baseStyle: React.CSSProperties = {
       position: "absolute",
-      width: "12px",
-      height: "12px",
+      width: "14px",
+      height: "14px",
       backgroundColor: "white",
       border: "2px solid #3b82f6",
       borderRadius: "50%",
       cursor: getCursorForHandle(position),
       transform: "translate(-50%, -50%)",
+      boxShadow: "0 2px 4px rgba(0,0,0,0.3)",
+      zIndex: 10,
     };
 
     switch (position) {
@@ -217,14 +255,16 @@ const Handle: React.FC<HandleProps> = ({ position, onMouseDown }) => {
         return {
           ...baseStyle,
           left: "50%",
-          top: -30,
+          top: -40,
           backgroundColor: "#3b82f6",
           cursor: "grab",
+          width: "16px",
+          height: "16px",
         };
       default:
         return baseStyle;
     }
   };
 
-  return <div style={getHandleStyle()} onMouseDown={onMouseDown} />;
+  return <div style={getHandleStyle()} onMouseDown={onMouseDown} data-transform-handle={position} />;
 };
