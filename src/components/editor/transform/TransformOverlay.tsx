@@ -26,6 +26,7 @@ const traceSelect = (...args: unknown[]) => {
   if (!SELECT_TRACE) return;
   console.log("[SelectTrace][TransformOverlay]", ...args);
 };
+const CENTER_GUIDE_SNAP_PX = 8;
 
 interface TransformOverlayProps {
   /** Canvas dimensions for coordinate conversion */
@@ -360,6 +361,13 @@ export const TransformOverlay: React.FC<TransformOverlayProps> = ({ canvasWidth,
   const handleDisplayWidth = bottomRight.x - topLeft.x;
   const handleDisplayHeight = bottomRight.y - topLeft.y;
   const rotation = selectedClip.rotation ?? 0;
+  const clipCenterX = selectedClip.x + selectedClip.width / 2;
+  const clipCenterY = selectedClip.y + selectedClip.height / 2;
+  const canvasCenterX = canvasWidth / 2;
+  const canvasCenterY = canvasHeight / 2;
+  const showVerticalCenterGuide = isDragging && Math.abs(clipCenterX - canvasCenterX) <= CENTER_GUIDE_SNAP_PX;
+  const showHorizontalCenterGuide = isDragging && Math.abs(clipCenterY - canvasCenterY) <= CENTER_GUIDE_SNAP_PX;
+  const centerScreen = canvasToScreen(canvasCenterX, canvasCenterY, viewport, { width: canvasWidth, height: canvasHeight }, scale, zeroOffset);
 
   return (
     <div
@@ -398,6 +406,36 @@ export const TransformOverlay: React.FC<TransformOverlayProps> = ({ canvasWidth,
           zIndex: 10,
         }}
       />
+
+      {/* Center alignment guides (visible during move/resize near center) */}
+      {showVerticalCenterGuide && (
+        <div
+          className="absolute pointer-events-none"
+          style={{
+            left: centerScreen.x,
+            top: 0,
+            width: 1,
+            height: displayHeight,
+            background: "rgba(59,130,246,0.95)",
+            boxShadow: "0 0 0 1px rgba(59,130,246,0.3)",
+            zIndex: 14,
+          }}
+        />
+      )}
+      {showHorizontalCenterGuide && (
+        <div
+          className="absolute pointer-events-none"
+          style={{
+            left: 0,
+            top: centerScreen.y,
+            width: displayWidth,
+            height: 1,
+            background: "rgba(59,130,246,0.95)",
+            boxShadow: "0 0 0 1px rgba(59,130,246,0.3)",
+            zIndex: 14,
+          }}
+        />
+      )}
 
       {/* Move surface - explicit drag target across full selected bounds */}
       <div
