@@ -2,12 +2,13 @@ import React, { useRef, useState, useEffect, useCallback } from "react";
 import { Plus, X, RotateCcw, Play } from "lucide-react";
 import { convertFileSrc } from "@tauri-apps/api/core";
 import { useUIStore } from "@/store/uiStore";
-import { useTimelineStore } from "@/store/timelineStore";
+import { getInsertIndexForNewTrack, useTimelineStore } from "@/store/timelineStore";
 import { useProjectStore } from "@/store/projectStore";
 import { createClipFromAsset } from "@/lib/timelineClip";
 import { getActiveSessionOrNull } from "@/core/runtime/ProjectSession";
 import { autoAdaptSequenceForFirstVisualClip } from "@/lib/sequenceAutoAspect";
-import { DEFAULT_PLACEMENT_POLICY, resolveClipStartTime, resolvePreferredTrackId, resolveTargetTrackType } from "@/lib/placementPolicy";
+import { DEFAULT_PLACEMENT_POLICY, resolveAddToTimelinePlacement } from "@/lib/placementPolicy";
+import { getPlaybackClock } from "@/hooks/usePlaybackClock";
 import type { SourcePlaybackContext } from "@/core/playback";
 import { GPUPreview } from "./GPUPreview";
 import { AudioWaveform } from "./AudioWaveform";
@@ -19,7 +20,7 @@ const USE_GPU_PREVIEW = false;
 
 export const SourcePreview: React.FC = () => {
   const { sourceAsset, sourceInPoint, sourceOutPoint, exitSourceMode, markSourceIn, markSourceOut } = useUIStore();
-  const { tracks, clips, addClip, addTrack } = useTimelineStore();
+  const { tracks, clips, addClip, addTrack, insertTrackAt, getTimelineEndTime } = useTimelineStore();
   const { project, updateProject } = useProjectStore();
   const videoRef = useRef<HTMLVideoElement>(null);
   const audioRef = useRef<HTMLAudioElement>(null);
@@ -112,11 +113,18 @@ export const SourcePreview: React.FC = () => {
 
   const handleAddToTimeline = () => {
     if (!project) return;
-    const targetTrackType = resolveTargetTrackType(sourceAsset);
-    let targetTrackId = resolvePreferredTrackId({ tracks, asset: sourceAsset });
-    if (!targetTrackId) {
-      addTrack(targetTrackType);
-      targetTrackId = resolvePreferredTrackId({ tracks: useTimelineStore.getState().tracks, asset: sourceAsset });
+    const placement = resolveAddToTimelinePlacement({
+      asset: sourceAsset,
+      tracks,
+      clips,
+      playheadTime: getPlaybackClock().time,
+      sequenceEndTime: getTimelineEndTime(),
+    });
+    let targetTrackId = placement.targetTrackId;
+    if (placement.shouldCreateTrack || !targetTrackId) {
+      const latestTracks = useTimelineStore.getState().tracks;
+      const insertIndex = getInsertIndexForNewTrack(latestTracks, placement.trackType);
+      targetTrackId = insertTrackAt(placement.trackType, insertIndex);
     }
     if (!targetTrackId) return;
 
@@ -130,16 +138,10 @@ export const SourcePreview: React.FC = () => {
     }
     const nextProject = useProjectStore.getState().project;
 
-    const trackClips = clips.filter((c) => c.trackId === targetTrackId);
-    const startTime = resolveClipStartTime({
-      intent: "track_end",
-      timelineEndTime: 0,
-      trackClips,
-    });
     const newClip = createClipFromAsset({
       asset: sourceAsset,
       trackId: targetTrackId,
-      startTime,
+      startTime: placement.startTime,
       width: nextProject?.canvasWidth ?? project.canvasWidth,
       height: nextProject?.canvasHeight ?? project.canvasHeight,
     });
