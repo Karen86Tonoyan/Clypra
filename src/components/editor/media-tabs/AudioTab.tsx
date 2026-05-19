@@ -92,7 +92,7 @@ const AudioItem: React.FC<{ item: any; onAddToTimeline: () => void }> = ({ item,
             </button>
           </TooltipTrigger>
           <TooltipContent side="top">
-            <p>Add to Timeline</p>
+            <p>Add to Track</p>
           </TooltipContent>
         </Tooltip>
 

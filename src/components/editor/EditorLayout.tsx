@@ -9,7 +9,7 @@ import { useProjectStore } from "@/store/projectStore";
 import { createClipFromAsset } from "@/lib/timelineClip";
 import { createTextClip, TEXT_PRESETS } from "@/lib/textClip";
 import { autoAdaptSequenceForFirstVisualClip } from "@/lib/sequenceAutoAspect";
-import { DEFAULT_PLACEMENT_POLICY, resolveAddToTimelinePlacement } from "@/lib/placementPolicy";
+import { DEFAULT_PLACEMENT_POLICY, resolveAddToTimelinePlacement, resolveDefaultFitModeForAsset } from "@/lib/placementPolicy";
 import { getPlaybackClock } from "@/hooks/usePlaybackClock";
 
 export const EditorLayout: React.FC = () => {
@@ -55,6 +55,7 @@ export const EditorLayout: React.FC = () => {
         startTime: placement.startTime,
         width: nextProject?.canvasWidth || project?.canvasWidth || 1920,
         height: nextProject?.canvasHeight || project?.canvasHeight || 1080,
+        fitMode: resolveDefaultFitModeForAsset(mediaAsset),
       });
 
       addClip(newClip);

@@ -7,7 +7,7 @@ import { useProjectStore } from "@/store/projectStore";
 import { createClipFromAsset } from "@/lib/timelineClip";
 import { getActiveSessionOrNull } from "@/core/runtime/ProjectSession";
 import { autoAdaptSequenceForFirstVisualClip } from "@/lib/sequenceAutoAspect";
-import { DEFAULT_PLACEMENT_POLICY, resolveAddToTimelinePlacement } from "@/lib/placementPolicy";
+import { DEFAULT_PLACEMENT_POLICY, resolveAddToTimelinePlacement, resolveDefaultFitModeForAsset } from "@/lib/placementPolicy";
 import { getPlaybackClock } from "@/hooks/usePlaybackClock";
 import type { SourcePlaybackContext } from "@/core/playback";
 import { GPUPreview } from "./GPUPreview";
@@ -144,6 +144,7 @@ export const SourcePreview: React.FC = () => {
       startTime: placement.startTime,
       width: nextProject?.canvasWidth ?? project.canvasWidth,
       height: nextProject?.canvasHeight ?? project.canvasHeight,
+      fitMode: resolveDefaultFitModeForAsset(sourceAsset),
     });
 
     const trimIn = sourceInPoint ?? 0;
@@ -288,7 +289,7 @@ export const SourcePreview: React.FC = () => {
               </button>
             )}
             <div className="w-px h-4 bg-white/10 mx-1" />
-            <button onClick={handleAddToTimeline} disabled={!hasCompleteMarks} className={`flex items-center gap-1 px-2.5 h-6 rounded text-[10px] font-semibold transition-colors ${hasCompleteMarks ? "bg-green-600/90 hover:bg-green-600 text-white cursor-pointer" : "bg-text-muted/70 hover:bg-text-muted/90 text-white cursor-not-allowed"}`} title={hasCompleteMarks ? `Add ${markedDuration?.toFixed(2)}s to Timeline` : "Add to Timeline"}>
+            <button onClick={handleAddToTimeline} disabled={!hasCompleteMarks} className={`flex items-center gap-1 px-2.5 h-6 rounded text-[10px] font-semibold transition-colors ${hasCompleteMarks ? "bg-green-600/90 hover:bg-green-600 text-white cursor-pointer" : "bg-text-muted/70 hover:bg-text-muted/90 text-white cursor-not-allowed"}`} title={hasCompleteMarks ? `Add ${markedDuration?.toFixed(2)}s to Timeline` : "Add to Track"}>
               <Plus className="w-3 h-3" />
               Add
             </button>

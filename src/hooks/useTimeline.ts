@@ -3,7 +3,7 @@ import { useProjectStore } from '../store/projectStore'
 import type { Clip, MediaAsset } from '../types'
 import { createClipFromAsset } from '../lib/timelineClip'
 import { autoAdaptSequenceForFirstVisualClip } from '../lib/sequenceAutoAspect'
-import { DEFAULT_PLACEMENT_POLICY } from '../lib/placementPolicy'
+import { DEFAULT_PLACEMENT_POLICY, resolveDefaultFitModeForAsset } from '../lib/placementPolicy'
 
 export const useTimeline = () => {
   const { tracks, clips, zoomLevel, scrollLeft, pixelsPerSecond, addClip, removeClip, updateClip, moveClip, setZoom, setScrollLeft } = useTimelineStore()
@@ -26,6 +26,7 @@ export const useTimeline = () => {
       startTime,
       width: nextProject?.canvasWidth || project?.canvasWidth || 1920,
       height: nextProject?.canvasHeight || project?.canvasHeight || 1080,
+      fitMode: resolveDefaultFitModeForAsset(asset),
     })
     addClip(clip)
   }

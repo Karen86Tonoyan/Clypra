@@ -15,7 +15,7 @@
  * If users want to see source media aspect ratio, they should use Source Preview mode.
  */
 
-import React, { useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
+import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { Check, ChevronDown, Expand, Shrink, Volume2, VolumeX } from "lucide-react";
 import { usePlaybackClock, usePlaybackControls, useTransportControls, getPlaybackClock } from "@/hooks/usePlaybackClock";
 import { useProjectStore } from "@/store/projectStore";
@@ -118,6 +118,7 @@ const ProgramPreview: React.FC = () => {
   const mediaAssets = useProjectStore((s) => s.mediaAssets);
   const tracks = useTimelineStore((s) => s.tracks);
   const clips = useTimelineStore((s) => s.clips);
+  const clearSelection = useUIStore((s) => s.clearSelection);
   const epoch = useTimelineStore((s) => s.epoch);
   const { previewViewport } = useUIStore();
   const containerRef = useRef<HTMLDivElement>(null);
@@ -300,6 +301,22 @@ const ProgramPreview: React.FC = () => {
   useViewportKeyboardShortcuts(canvasWidth, canvasHeight, dimensions.width, dimensions.height);
   useViewportWheelZoom(containerRef as React.RefObject<HTMLElement>);
   const { isPanning, spacePressed } = useViewportPan(containerRef as React.RefObject<HTMLElement>);
+
+  const handlePreviewPointerDownCapture = useCallback(
+    (e: React.PointerEvent<HTMLDivElement>) => {
+      if (e.button !== 0) return;
+      if (isPanning || spacePressed) return;
+      const target = e.target as HTMLElement | null;
+      if (!target) return;
+      // Keep selection when interacting with transform handles/surfaces.
+      if (target.closest("[data-transform-handle]")) return;
+      // Do not interfere with playhead interactions.
+      if (target.closest("[data-playhead]")) return;
+      // Clicking blank preview area should deselect active clip(s).
+      clearSelection();
+    },
+    [clearSelection, isPanning, spacePressed],
+  );
 
   // Preview Quality Manager — prevents 4K × DPR VRAM explosion
   const dpr = window.devicePixelRatio || 1;
@@ -607,7 +624,7 @@ const ProgramPreview: React.FC = () => {
       {/* ── Video Area ─────────────────────────────────────────────── */}
       <div className="flex-1 flex items-center justify-center overflow-hidden bg-[#06080a] relative">
         <div className="absolute inset-0 checkerboard opacity-[0.15] pointer-events-none" />
-        <div ref={containerRef} className={cn("w-full h-full flex items-center justify-center relative z-10 overflow-hidden", isPanning && "cursor-grabbing", spacePressed && !isPanning && "cursor-grab")}>
+        <div ref={containerRef} onPointerDownCapture={handlePreviewPointerDownCapture} className={cn("w-full h-full flex items-center justify-center relative z-10 overflow-hidden", isPanning && "cursor-grabbing", spacePressed && !isPanning && "cursor-grab")}>
           <div data-testid="program-preview-viewport" className="relative flex shrink-0 items-center justify-center overflow-hidden shadow-[0_0_40px_rgba(0, 0, 0, 0.36)]" style={{ width: displayWidth, height: displayHeight }}>
             <>
               {/* Canvas-based preview (matches export rendering) */}

@@ -361,6 +361,34 @@ describe("timelineClip timing helpers", () => {
       expect(clip.y).toBe(0);
       expect(clip.x).toBeGreaterThan(0);
     });
+
+    it("fits landscape image inside portrait canvas with contain (no crop)", () => {
+      const asset: MediaAsset = {
+        id: "landscape-image",
+        name: "landscape.png",
+        path: "/landscape.png",
+        type: "image",
+        duration: 0,
+        width: 1920,
+        height: 1080,
+        size: 1000,
+      };
+
+      const clip = createClipFromAsset({
+        asset,
+        trackId: "track-1",
+        startTime: 0,
+        width: 1080, // 9:16 canvas
+        height: 1920,
+        fitMode: "contain",
+      });
+
+      // Contain in portrait: full width, reduced height, vertically centered.
+      expect(clip.width).toBe(1080);
+      expect(clip.height).toBeLessThan(1920);
+      expect(clip.x).toBe(0);
+      expect(clip.y).toBeGreaterThan(0);
+    });
   });
 
   describe("timing invariant: duration === trimOut - trimIn", () => {

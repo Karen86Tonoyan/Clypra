@@ -1,8 +1,8 @@
-import type { ClipFitMode } from "./timelineClip";
+import type { ClipFitModeExtended } from "./timelineClip";
 import type { Clip, MediaAsset, Track } from "@/types";
 
 export interface PlacementPolicy {
-  defaultVisualFitMode: ClipFitMode;
+  defaultVisualFitMode: ClipFitModeExtended;
   centerAnchor: boolean;
   autoAdaptSequenceForFirstVisualClip: boolean;
 }
@@ -19,6 +19,17 @@ export const DEFAULT_PLACEMENT_POLICY: PlacementPolicy = {
 
 export type PlacementIntent = "timeline_end" | "track_end" | "drop";
 export type AddPlacementIntent = "playhead";
+
+/**
+ * Professional default fit policy by media class:
+ * - Video: cover (full-frame editorial baseline)
+ * - Image: contain (preserve full still content by default)
+ */
+export function resolveDefaultFitModeForAsset(asset: Pick<MediaAsset, "type">): ClipFitModeExtended {
+  if (asset.type === "image") return "contain";
+  if (asset.type === "video") return "cover";
+  return DEFAULT_PLACEMENT_POLICY.defaultVisualFitMode;
+}
 
 export function resolveTargetTrackType(asset: Pick<MediaAsset, "type">): "video" | "audio" {
   return asset.type === "audio" ? "audio" : "video";

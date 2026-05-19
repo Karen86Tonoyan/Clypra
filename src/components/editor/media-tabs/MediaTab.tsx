@@ -157,7 +157,7 @@ export const MediaTab: React.FC<MediaTabProps> = ({ onAddToTimeline }) => {
                   },
                 }
               : {
-                  label: "Add to Timeline",
+                  label: "Add to Track",
                   onClick: () => {
                     const asset = mediaAssets.find((a) => a.id === contextMenu.mediaId);
                     if (asset) onAddToTimeline?.(asset, "media");

@@ -73,7 +73,7 @@ export const MediaCard: React.FC<MediaCardProps> = ({ asset, isSelected, isUsedI
           e.stopPropagation();
           onAddToTimeline();
         }}
-        title="Add to Timeline"
+        title="Add to Track"
         className="hidden cursor-pointer group-hover:flex bg-accent hover:bg-accent/90 w-5 h-5 rounded-full justify-center items-center absolute top-1 right-1 transition-colors"
       >
         <Plus size={14} className="text-white" />
