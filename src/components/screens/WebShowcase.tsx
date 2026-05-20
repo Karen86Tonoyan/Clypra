@@ -1,12 +1,7 @@
 import React from "react";
-import { Download, Play, Sparkles, Shield, Monitor, Layers, Sliders, ArrowRight, Laptop, HelpCircle, Terminal } from "lucide-react";
-import { Button } from "@/components/ui/Button";
+import { Download, ArrowRight, Sparkles, Shield, Terminal } from "lucide-react";
 
-interface WebShowcaseProps {
-  onLaunchDemo: () => void;
-}
-
-export const WebShowcase: React.FC<WebShowcaseProps> = ({ onLaunchDemo }) => {
+export const WebShowcase: React.FC = () => {
   return (
     <div className="w-full min-h-screen bg-[#09090b] text-[#fafafa] flex flex-col font-sans selection:bg-accent/30 selection:text-white overflow-x-hidden">
       {/* ── Background Gradients & Glows ─────────────────────────── */}
@@ -58,55 +53,18 @@ export const WebShowcase: React.FC<WebShowcaseProps> = ({ onLaunchDemo }) => {
         <section className="text-center max-w-3xl mx-auto flex flex-col gap-6">
           <div className="inline-flex self-center items-center gap-2 px-3 py-1 rounded-full border border-accent/30 bg-accent/10 backdrop-blur-md shadow-[0_0_20px_rgba(108,99,255,0.1)]">
             <Sparkles className="w-3.5 h-3.5 text-accent animate-bounce" />
-            <span className="text-[10px] font-semibold tracking-wider text-accent uppercase font-mono">Web Sandbox Released</span>
+            <span className="text-[10px] font-semibold tracking-wider text-accent uppercase font-mono">v1.0.1 Stable Release</span>
           </div>
 
           <h2 className="text-4xl md:text-6xl font-extrabold tracking-tight leading-[1.1] bg-gradient-to-b from-white via-white to-neutral-400 bg-clip-text text-transparent font-outfit">
             A Premium Desktop Video Editor.
             <br />
-            <span className="bg-gradient-to-r from-accent to-purple-400 bg-clip-text text-transparent">Directly in Your Browser.</span>
+            <span className="bg-gradient-to-r from-accent to-purple-400 bg-clip-text text-transparent">Engineered for Performance.</span>
           </h2>
 
           <p className="text-sm md:text-base text-text-muted leading-relaxed font-sans max-w-2xl mx-auto">
-            Clypra is a modern, high-performance video editor engineered using Tauri, React, and Rust. Experience the desktop-class NLE timeline, visual asset pools, and instant video exports directly in this web showcase.
+            Clypra is a modern, high-performance desktop video editor built with Tauri, React, and Rust. Experience the desktop-class NLE timeline, hardware-accelerated rendering, and visual asset pools directly on your machine.
           </p>
-        </section>
-
-        {/* ── Interactive Web Sandbox Callout (PRIMARY ACTION) ── */}
-        <section className="w-full">
-          <div
-            className="relative rounded-3xl overflow-hidden border border-white/[0.06] p-8 md:p-12 flex flex-col md:flex-row items-center justify-between gap-8 backdrop-blur-xl bg-surface/50 shadow-[0_20px_50px_rgba(0,0,0,0.4)] group"
-            style={{
-              background: "linear-gradient(135deg, rgba(20, 20, 25, 0.7) 0%, rgba(10, 10, 12, 0.9) 100%)",
-            }}
-          >
-            {/* Hover card border glow */}
-            <div className="absolute inset-0 border border-accent/0 group-hover:border-accent/10 rounded-3xl transition-colors duration-500 pointer-events-none" />
-            
-            <div className="flex-1 flex flex-col gap-4 text-left">
-              <div className="inline-flex self-start items-center gap-1.5 text-accent font-semibold text-xs tracking-wider uppercase font-mono">
-                <Laptop className="w-4 h-4" />
-                Browser Sandbox
-              </div>
-              <h3 className="text-2xl md:text-3xl font-bold tracking-tight text-white font-outfit">
-                Try the Clypra Interactive Web Demo
-              </h3>
-              <p className="text-xs md:text-sm text-text-muted leading-relaxed max-w-xl">
-                Experience the timeline tracks, clip drag-and-drop mechanics, preset configurations, and the real-time frame renderer. No download required. Runs securely in sandbox mode.
-              </p>
-            </div>
-
-            <div className="shrink-0">
-              <Button
-                onClick={onLaunchDemo}
-                className="relative h-14 px-8 text-base font-semibold bg-accent text-white hover:bg-accent/90 hover:scale-[1.02] active:scale-[0.98] transition-all rounded-2xl flex items-center gap-3 shadow-[0_0_30px_rgba(108,99,255,0.4)] hover:shadow-[0_0_40px_rgba(108,99,255,0.6)] cursor-pointer group-hover:animate-pulse"
-              >
-                <Play className="w-5 h-5 fill-white text-white" />
-                Launch Web Demo
-                <ArrowRight className="w-5 h-5 transition-transform group-hover:translate-x-1" />
-              </Button>
-            </div>
-          </div>
         </section>
 
         {/* ── Native Downloads Section ── */}

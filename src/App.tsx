@@ -17,7 +17,6 @@ const isTauri = typeof window !== "undefined" && "__TAURI_INTERNALS__" in window
 const App = () => {
   const { project, createProject, loadProject, setRecentProjects } = useProjectStore();
   const [isLoading, setIsLoading] = useState(true);
-  const [showSandbox, setShowSandbox] = useState(false);
   const { showSettingsModal, toggleSettingsModal } = useUIStore();
 
   useEffect(() => {
@@ -146,8 +145,8 @@ const App = () => {
     );
   }
 
-  if (!isTauri && !showSandbox) {
-    return <WebShowcase onLaunchDemo={() => setShowSandbox(true)} />;
+  if (!isTauri) {
+    return <WebShowcase />;
   }
 
   return (
