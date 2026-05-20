@@ -30,8 +30,9 @@ export const WebShowcase: React.FC<WebShowcaseProps> = ({ onLaunchDemo }) => {
       {/* ── Navigation / Header ────────────────────────────────── */}
       <header className="relative z-10 w-full max-w-7xl mx-auto px-6 h-20 flex items-center justify-between border-b border-white/[0.04] backdrop-blur-md bg-[#09090b]/40">
         <div className="flex items-center gap-3">
-          <div className="w-9 h-9 rounded-xl bg-accent/15 flex items-center justify-center border border-accent/20 shadow-[0_0_15px_rgba(108,99,255,0.15)]">
-            <Sliders className="w-4 h-4 text-accent animate-pulse" />
+          <div className="w-10 h-10 flex items-center justify-center relative">
+            <div className="absolute inset-0 bg-accent/20 blur-md rounded-full animate-pulse"></div>
+            <img src="/clypra.svg" alt="Clypra Logo" className="w-9 h-9 object-contain relative z-10" />
           </div>
           <div>
             <h1 className="text-lg font-bold tracking-tight bg-gradient-to-r from-white to-neutral-400 bg-clip-text text-transparent">Clypra</h1>

@@ -176,8 +176,9 @@ export const LaunchScreen: React.FC<LaunchScreenProps> = ({ onProjectCreate, onP
         {/* Header / Brand */}
         <header className="flex items-center justify-between mb-12">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-accent/10 flex items-center justify-center">
-              <Film className="w-5 h-5 text-accent" />
+            <div className="w-10 h-10 flex items-center justify-center relative">
+              <div className="absolute inset-0 bg-accent/20 blur-lg rounded-full"></div>
+              <img src="/clypra.svg" alt="Clypra Logo" className="w-10 h-10 object-contain relative z-10 drop-shadow-[0_0_8px_rgba(108,99,255,0.5)]" />
             </div>
             <div>
               <h1 className="text-xl font-bold text-text-primary tracking-tight leading-tight">Clypra</h1>
