@@ -87,8 +87,8 @@ jobs:
       matrix:
         include:
           - platform: macos-latest
-            target: universal-apple-darwin
-            args: "--target universal-apple-darwin"
+            target: aarch64-apple-darwin
+            args: ""
           - platform: windows-latest
             target: x86_64-pc-windows-msvc
             args: ""
@@ -132,8 +132,11 @@ jobs:
             libavcodec-dev \
             libavformat-dev \
             libavutil-dev \
+            libavfilter-dev \
+            libavdevice-dev \
             libswscale-dev \
             libswresample-dev \
+            libpostproc-dev \
             pkg-config \
             libwebkit2gtk-4.1-dev \
             build-essential \
@@ -149,7 +152,8 @@ jobs:
         if: matrix.platform == 'windows-latest'
         run: |
           vcpkg install ffmpeg:x64-windows-static-md
-          echo "FFMPEG_DIR=C:\vcpkg\installed\x64-windows-static-md" >> $env:GITHUB_ENV
+          echo "VCPKG_ROOT=C:\vcpkg" >> $env:GITHUB_ENV
+          echo "VCPKGRS_TRIPLET=x64-windows-static-md" >> $env:GITHUB_ENV
 
       - name: Install frontend dependencies
         run: npm ci
