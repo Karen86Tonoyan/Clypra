@@ -1,4 +1,7 @@
 import { Download, Star } from "lucide-react";
+import { useRef, useEffect } from "react";
+import { allEffects } from "../../features/text-effects/effects/definitions";
+import { renderTextEffect } from "../../features/text-effects/renderer";
 
 import { type TextEffectPreset } from "@/constants/textEffects";
 
@@ -21,6 +24,18 @@ const getFontFamilyStack = (fontFamily: string) => {
 };
 
 export const EffectCard: React.FC<EffectCardProps> = ({ effect, isFavorite, isDownloading, onFavorite, onApply, onPreview }) => {
+  const premiumEffect = allEffects.find((e) => e.id === effect.id);
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+
+  useEffect(() => {
+    if (premiumEffect && canvasRef.current) {
+      const canvas = canvasRef.current;
+      canvas.width = 160;
+      canvas.height = 160;
+      renderTextEffect(canvas, effect.name, premiumEffect, 28);
+    }
+  }, [effect, premiumEffect]);
+
   const baseStyle: React.CSSProperties = {
     fontFamily: getFontFamilyStack(effect.fontFamily),
     fontWeight: effect.fontWeight,
@@ -69,15 +84,21 @@ export const EffectCard: React.FC<EffectCardProps> = ({ effect, isFavorite, isDo
       </button>
 
       {/* Real-time HTML Styled Visual Preview */}
-      <div className="flex-1 flex items-center justify-center w-full px-1 py-3 select-none relative">
-        {hasStroke && (
-          <span style={strokeStyle} className="text-lg font-bold tracking-tight text-center wrap-break-word select-none pointer-events-none">
-            {effect.name}
-          </span>
+      <div className="flex-1 flex items-center justify-center w-full px-1 py-3 select-none relative overflow-hidden">
+        {premiumEffect ? (
+          <canvas ref={canvasRef} className="max-w-full max-h-full block select-none pointer-events-none" />
+        ) : (
+          <>
+            {hasStroke && (
+              <span style={strokeStyle} className="text-lg font-bold tracking-tight text-center wrap-break-word select-none pointer-events-none">
+                {effect.name}
+              </span>
+            )}
+            <span style={{ ...fillStyle, position: hasStroke ? "relative" : "static", zIndex: 2 }} className="text-lg font-bold tracking-tight text-center wrap-break-word select-none">
+              {effect.name}
+            </span>
+          </>
         )}
-        <span style={{ ...fillStyle, position: hasStroke ? "relative" : "static", zIndex: 2 }} className="text-lg font-bold tracking-tight text-center wrap-break-word select-none">
-          {effect.name}
-        </span>
       </div>
 
       {/* Footer Info / Apply Download Button */}

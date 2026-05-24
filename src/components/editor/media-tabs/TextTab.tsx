@@ -8,6 +8,7 @@ import { EffectCard } from "@/components/ui/EffectCard";
 import { TemplateCard } from "@/components/ui/TemplateCard";
 import { useUIStore } from "@/store/uiStore";
 import { TextEffectPicker } from "../../../features/text-effects/TextEffectPicker";
+import { allEffects } from "../../../features/text-effects/effects/definitions";
 
 export const TextTab: React.FC<TabProps> = ({ onAddToTimeline }) => {
   const [activeTab, setActiveTab] = useState<"effects" | "templates" | "yours" | "captions">("effects");
@@ -19,7 +20,12 @@ export const TextTab: React.FC<TabProps> = ({ onAddToTimeline }) => {
   const [downloadingIds, setDownloadingIds] = useState<Set<string>>(new Set());
 
   const handlePreview = (item: any, type: "effect" | "template") => {
-    useUIStore.getState().previewTextPreset(item, type);
+    const premiumDef = allEffects.find((e) => e.id === item.id);
+    if (premiumDef && type === "effect") {
+      handlePremiumPreview(premiumDef);
+    } else {
+      useUIStore.getState().previewTextPreset(item, type);
+    }
   };
 
   const handlePremiumPreview = (effect: any) => {
@@ -93,21 +99,40 @@ export const TextTab: React.FC<TabProps> = ({ onAddToTimeline }) => {
 
       // Apply to timeline
       if (type === "effect") {
-        onAddToTimeline?.(
-          {
-            name: item.name,
-            presetType: "effect",
-            styleId: item.id,
-            fontFamily: item.fontFamily,
-            color: item.color,
-            fontWeight: item.fontWeight,
-            fontStyle: item.fontStyle,
-            stroke: item.stroke,
-            shadow: item.shadow,
-            background: item.background,
-          },
-          "text",
-        );
+        const premiumDef = allEffects.find((e) => e.id === item.id);
+        if (premiumDef) {
+          onAddToTimeline?.(
+            {
+              name: item.name,
+              presetType: "effect",
+              styleId: item.id,
+              fontFamily: premiumDef.font.family,
+              color: premiumDef.fills[0]?.type === "solid" ? (premiumDef.fills[0] as any).color : "#ffffff",
+              fontWeight: premiumDef.font.weight === 900 ? "bold" : "normal",
+              fontStyle: premiumDef.font.style,
+              stroke: premiumDef.strokes[0] ? { color: premiumDef.strokes[0].color, width: premiumDef.strokes[0].width } : undefined,
+              shadow: premiumDef.shadows[0] ? { color: premiumDef.shadows[0].color, blur: premiumDef.shadows[0].blur, offsetX: premiumDef.shadows[0].offsetX, offsetY: premiumDef.shadows[0].offsetY } : undefined,
+              background: premiumDef.background ? { color: premiumDef.background.color, padding: premiumDef.background.paddingX, borderRadius: premiumDef.background.borderRadius } : undefined,
+            },
+            "text",
+          );
+        } else {
+          onAddToTimeline?.(
+            {
+              name: item.name,
+              presetType: "effect",
+              styleId: item.id,
+              fontFamily: item.fontFamily,
+              color: item.color,
+              fontWeight: item.fontWeight,
+              fontStyle: item.fontStyle,
+              stroke: item.stroke,
+              shadow: item.shadow,
+              background: item.background,
+            },
+            "text",
+          );
+        }
       } else {
         onAddToTimeline?.(
           {
@@ -131,7 +156,7 @@ export const TextTab: React.FC<TabProps> = ({ onAddToTimeline }) => {
   };
 
   // Categories list
-  const effectCategories = ["Trending", "Classic", "NEW", "Hits", "Animation", "Food", "Textile Art", "Manuscript", "Metal"];
+  const effectCategories = ["Trending", "Classic", "NEW", "Hits", "Metal", "Neon", "3D", "Gradient", "Glitch", "Food", "Textile Art", "Manuscript"];
   const templateCategories = ["Trending", "Classic", "NEW", "Hits", "Free Fire", "Icons", "Title", "Retro"];
 
   // Filter items
@@ -175,13 +200,13 @@ export const TextTab: React.FC<TabProps> = ({ onAddToTimeline }) => {
       </div>
 
       {/* ── Sub-Categories Horizontal Navigation Row (Overflows X) ─────── */}
-      {activeTab === "templates" && (
+      {(activeTab === "effects" || activeTab === "templates") && (
         <div className="relative shrink-0 border-b border-border/40 bg-surface/5">
           {/* Subtle Left Fade indicator */}
           <div className="absolute left-0 top-0 bottom-0 w-3 bg-linear-to-l to-surface from-transparent pointer-events-none" />
 
           <div className="flex overflow-x-auto gap-2 p-1 whitespace-nowrap" style={{ scrollbarWidth: "none" }}>
-            {templateCategories.map((cat) => (
+            {(activeTab === "effects" ? effectCategories : templateCategories).map((cat) => (
               <button key={cat} onClick={() => setActiveCategory(cat)} className={`px-2 py-1 text-xs font-medium rounded-sm transition-colors cursor-pointer ${activeCategory === cat ? "bg-accent/10 text-accent" : "text-text-muted hover:text-text-primary"}`}>
                 {cat}
               </button>
@@ -194,11 +219,11 @@ export const TextTab: React.FC<TabProps> = ({ onAddToTimeline }) => {
       )}
 
       {/* ── Search bar header ────────────────────────────────────────── */}
-      {activeTab !== "effects" && (
+      {activeTab !== "captions" && (
         <div className="p-1 border-b border-border/30 flex items-center justify-between gap-3 shrink-0">
           <div className="flex-1 relative">
             <Search className="w-3.5 h-3.5 absolute left-2.5 top-1/2 -translate-y-1/2 text-text-muted" />
-            <input type="text" placeholder={`Search ${activeTab === "templates" ? "templates" : "text presets"}...`} value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} className="w-full bg-surface-raised rounded-sm pl-8 pr-3 py-1.5 text-xs text-text-primary outline-none transition-colors" />
+            <input type="text" placeholder={`Search ${activeTab === "effects" ? "effects" : activeTab === "templates" ? "templates" : "text presets"}...`} value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} className="w-full bg-surface-raised rounded-sm pl-8 pr-3 py-1.5 text-xs text-text-primary outline-none transition-colors" />
           </div>
 
           <div className="flex items-center gap-1 shrink-0 text-[10px] font-mono text-text-muted font-semibold bg-surface-raised border border-border/50 px-2 py-1.5 rounded-md">
@@ -244,10 +269,20 @@ export const TextTab: React.FC<TabProps> = ({ onAddToTimeline }) => {
 
         {/* Effects Display Grid */}
         {activeTab === "effects" && (
-          <TextEffectPicker
-            selectedEffectId={useUIStore((state) => state.sourceTextPreset?.styleId)}
-            onEffectSelect={handlePremiumPreview}
-          />
+          <>
+            {filteredEffects.length === 0 ? (
+              <div className="h-40 flex flex-col items-center justify-center text-text-muted gap-1 text-xs">
+                <p>No matching effects found</p>
+                <p className="opacity-60">Try searching for other styles</p>
+              </div>
+            ) : (
+              <div className="grid grid-cols-3 gap-3">
+                {filteredEffects.map((effect) => (
+                  <EffectCard key={effect.id} effect={effect} isFavorite={favorites.includes(effect.id)} isDownloading={downloadingIds.has(effect.id)} onFavorite={(e) => toggleFavorite(effect.id, e)} onApply={(e) => handleDownloadAndApply(effect, "effect", e)} onPreview={() => handlePreview(effect, "effect")} />
+                ))}
+              </div>
+            )}
+          </>
         )}
 
         {/* Templates Display Grid */}
