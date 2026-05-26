@@ -20,13 +20,13 @@ export const EffectCard: React.FC<EffectCardProps> = ({ effect, isFavorite, isDo
   useEffect(() => {
     if (premiumEffect && canvasRef.current) {
       const canvas = canvasRef.current;
-      canvas.width = 160;
-      canvas.height = 160;
-      renderTextEffect(canvas, "Default text", premiumEffect, 28);
+      canvas.width = 250;
+      canvas.height = 100;
+      renderTextEffect(canvas, "Default text", premiumEffect, 22);
 
       if (typeof document !== "undefined" && document.fonts) {
         document.fonts.ready.then(() => {
-          renderTextEffect(canvas, "Default text", premiumEffect, 28);
+          renderTextEffect(canvas, "Default text", premiumEffect, 22);
         });
       }
     }
