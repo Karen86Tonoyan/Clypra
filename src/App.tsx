@@ -2,7 +2,6 @@
 import { useState, useEffect } from "react";
 import { LaunchScreen } from "@/components/screens/LaunchScreen";
 import { EditorScreen } from "@/components/screens/EditorScreen";
-import { WebShowcase } from "@/components/screens/WebShowcase";
 import { TooltipProvider } from "@/components/ui/Tooltip";
 import { useProjectStore } from "@/store/projectStore";
 import { useUIStore } from "@/store/uiStore";
@@ -143,10 +142,6 @@ const App = () => {
         </div>
       </div>
     );
-  }
-
-  if (!isTauri) {
-    return <WebShowcase />;
   }
 
   return (

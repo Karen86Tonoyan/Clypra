@@ -15,15 +15,11 @@ Welcome to the Clypra repository. This `GEMINI.md` file serves as the strict sou
 
 ---
 
-## 2. Dual-Runtime Architecture (CRITICAL)
-Clypra functions in two distinctly different execution environments:
-1. **Native Desktop Mode**: Runs inside Tauri's Webview, granting full native filesystem and command-line access.
-2. **Web Showcase Mode**: Runs in standard web browsers (e.g., at `clypra.abdulkabirmusa.com`) as a sandbox/preview.
+## 2. Native Desktop Runtime (CRITICAL)
+Clypra is a native desktop app that runs inside Tauri's WebView, granting filesystem and command-line access through Tauri APIs.
 
 **The Golden Rule of Tauri Imports**:
-- The web showcase will **CRASH** if a standard browser attempts to execute a Tauri API call (e.g., `fs.readFile()`, `invoke()`, `dialog.open()`).
-- **Always** wrap Tauri-specific functionality in environment checks. You must verify the presence of `window.__TAURI_INTERNALS__` before attempting to execute Tauri APIs.
-- Provide graceful standard-HTML5 fallbacks for the web runtime (e.g., standard `<input type="file">` for importing, and HTML5 `<video>` for previewing instead of native GPU rasterization).
+- **Always** wrap Tauri-specific functionality in environment checks where code can execute before the Tauri bridge is ready. Verify the presence of `window.__TAURI_INTERNALS__` before executing Tauri APIs.
 
 ---
 

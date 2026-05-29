@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { Check, Palette, SlidersHorizontal, Info, Paintbrush, RotateCcw, Copy, Download, Upload, Globe } from "lucide-react";
+import { Check, Palette, SlidersHorizontal, Info, Paintbrush, RotateCcw, Copy, Download, Upload } from "lucide-react";
 import { openUrl } from "@tauri-apps/plugin-opener";
 import { Modal } from "./Modal";
 import { useSettingsStore, Theme, FontFamily, THEME_META, FONT_META, getThemeColors, getBaseThemeForCustomization, getThemeColorKeys } from "@/store/settingsStore";
@@ -499,10 +499,6 @@ function AboutTab() {
       </div>
       <p className="text-xs text-text-muted max-w-[280px] leading-relaxed">A modern, native video editor built with Tauri, React, and FFmpeg. Designed for speed and creative freedom.</p>
       <div className="flex items-center gap-4 mt-2">
-        <button onClick={() => openUrl("https://clypra.abdulkabirmusa.com")} className="text-xs font-medium text-text-muted hover:text-accent transition-colors flex items-center gap-1.5">
-          <Globe className="w-3.5 h-3.5" />
-          Website
-        </button>
         <button onClick={() => openUrl("https://github.com/AIEraDev/clypra")} className="text-xs font-medium text-text-muted hover:text-accent transition-colors flex items-center gap-1.5">
           <GithubIcon className="w-3.5 h-3.5" />
           GitHub

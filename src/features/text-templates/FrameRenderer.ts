@@ -105,8 +105,6 @@ export async function renderFrameSequenceToTauri(
         console.error(`Tauri failed to write frame ${i}:`, err);
         throw err;
       }
-    } else {
-      console.log(`[Web Showcase Mode] Bypassed native frame write to path: ${framePath}`);
     }
 
     paths.push(framePath);

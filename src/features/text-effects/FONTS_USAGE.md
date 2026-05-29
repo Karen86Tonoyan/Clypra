@@ -96,4 +96,4 @@ For secondary failover, a standard Google Web Fonts CDN link is appended to inde
 @import url("https://fonts.googleapis.com/css2?family=Roboto+Condensed:ital,wght@...&display=swap");
 ```
 
-This dual loading guarantees maximum fidelity regardless of execution mode (Native Tauri Desktop vs Web Showcase).
+This dual loading preserves text rendering fidelity in the native Tauri desktop app.
