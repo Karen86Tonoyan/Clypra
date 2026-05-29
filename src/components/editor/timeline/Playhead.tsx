@@ -255,7 +255,7 @@ export const Playhead: React.FC<PlayheadProps> = ({ pixelsPerSecond, duration, c
 
       {/* Circle handle at top */}
       <div
-        className="absolute rounded-full pointer-events-auto bg-accent"
+        className="absolute rounded-full pointer-events-auto bg-accent cursor-col-resize"
         onPointerDown={handlePointerDown}
         onClick={(e) => e.stopPropagation()}
         style={{
@@ -265,20 +265,18 @@ export const Playhead: React.FC<PlayheadProps> = ({ pixelsPerSecond, duration, c
           width: "12px",
           height: "12px",
           boxShadow: "0 0 0 1px rgba(0,0,0,0.35)",
-          cursor: "col-resize",
         }}
       />
 
       {/* Ruler-only drag hit target so playhead never steals clip trim handles */}
       <div
-        className="absolute left-1/2 -translate-x-1/2 pointer-events-auto"
+        className="absolute left-1/2 -translate-x-1/2 pointer-events-auto cursor-col-resize"
         onPointerDown={handlePointerDown}
         onClick={(e) => e.stopPropagation()}
         style={{
           top: 0,
           width: "16px",
           height: `${Math.max(12, rulerHeight)}px`,
-          cursor: "col-resize",
           background: "transparent",
         }}
       />

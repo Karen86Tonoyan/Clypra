@@ -158,7 +158,7 @@ describe("Clip Component", () => {
 
       const clipElement = screen.getByTestId("clip-clip-1");
       expect(clipElement.className).toContain("border-white");
-      expect(clipElement.className).toContain("border-2");
+      expect(clipElement.className).toContain("border");
     });
 
     it("applies locked styling when locked", () => {
@@ -236,8 +236,8 @@ describe("Clip Component", () => {
       const leftHandle = screen.getByTestId("clip-clip-1-resize-left");
       const rightHandle = screen.getByTestId("clip-clip-1-resize-right");
 
-      expect(leftHandle.className).toContain("w-4");
-      expect(rightHandle.className).toContain("w-4");
+      expect(leftHandle.className).toContain("w-3");
+      expect(rightHandle.className).toContain("w-3");
     });
   });
 

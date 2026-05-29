@@ -132,3 +132,47 @@ export const getFontFamilyStack = (fontFamily: string) => {
   const fallback = isMono ? "monospace" : isSerif ? "serif" : isCursive ? "cursive" : "sans-serif";
   return `"${fontFamily}", ${fallback}`;
 };
+
+/**
+ * Resolves a font family name to its exact Fontsource-registered name.
+ * Returns the BARE name without CSS quotes or fallback stacks.
+ *
+ * Use this when the caller will add its own quoting (e.g. engine ctx.font strings).
+ * Use getFontFamilyStack() when you need a full CSS font-family value with fallbacks.
+ *
+ * @param fontFamily - Raw font family name from effect definitions (e.g. "Montserrat")
+ * @returns Exact registered name (e.g. "Montserrat Variable")
+ */
+export const resolveFontFamilyName = (fontFamily: string): string => {
+  const f = fontFamily?.toLowerCase() || "";
+
+  // Google Web Fonts (Variable) — Fontsource registers these with " Variable" suffix
+  if (f.includes("inter")) return "Inter Variable";
+  if (f.includes("montserrat")) return "Montserrat Variable";
+  if (f.includes("geist")) return "Geist Variable";
+  if (f.includes("space grotesk") || f.includes("grotesk")) return "Space Grotesk Variable";
+  if (f.includes("outfit")) return "Outfit Variable";
+  if (f.includes("roboto variable")) return "Roboto Variable";
+  if (f.includes("roboto condensed")) return "Roboto Condensed";
+  if (f === "roboto") return "Roboto Variable";
+  if (f.includes("open sans")) return "Open Sans Variable";
+  if (f.includes("raleway")) return "Raleway Variable";
+  if (f.includes("oswald")) return "Oswald Variable";
+  if (f.includes("playfair display")) return "Playfair Display Variable";
+  if (f.includes("nunito")) return "Nunito Variable";
+  if (f.includes("dancing script")) return "Dancing Script Variable";
+
+  // Google Web Fonts (Non-Variable / Static) — name matches registration
+  if (f === "lato") return "Lato";
+  if (f === "anton") return "Anton";
+  if (f === "bebas neue") return "Bebas Neue";
+  if (f === "poppins") return "Poppins";
+  if (f === "permanent marker") return "Permanent Marker";
+  if (f === "bangers") return "Bangers";
+  if (f === "press start 2p") return "Press Start 2P";
+  if (f === "pacifico") return "Pacifico";
+
+  // System / unknown fonts — return as-is
+  return fontFamily;
+};
+

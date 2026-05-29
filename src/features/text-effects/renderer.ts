@@ -10,14 +10,17 @@ import { hasRegisteredEngine, renderRegisteredEffect } from "./registry";
  * To add a new effect: drop its file in effects/ and add two lines to registry.ts.
  */
 export const renderTextEffectToContext = (ctx: CanvasRenderingContext2D | OffscreenCanvasRenderingContext2D, text: string, effect: TextEffectDefinition, fontSize: number, _x: number, _y: number, canvasWidth: number, canvasHeight: number) => {
-  // Apply baseline font config (specialized renderers override this internally)
-  applyFontConfig(ctx, effect.font, fontSize);
-
-  // Registry dispatch — covers all studio-generated engine effects
+  // Registry dispatch — covers all studio-generated engine effects.
+  // Registered engines set their own ctx.font and expect default textBaseline ("alphabetic").
+  // Do NOT call applyFontConfig here — it sets textBaseline = "middle" which breaks
+  // the engines' vertical centering math (fontSize * 0.8 offset assumes "alphabetic").
   if (hasRegisteredEngine(effect?.id)) {
     renderRegisteredEffect(ctx, effect, text, fontSize, canvasWidth, canvasHeight);
     return;
   }
+
+  // Apply baseline font config only for the fallback generic renderer
+  applyFontConfig(ctx, effect.font, fontSize);
 
   // ── Fallback generic renderer ────────────────────────────────────────────
   // Reached only for effects that are not registered in the registry.

@@ -32,7 +32,7 @@ import { calculateDisplayTransform } from "@/lib/coordinateSystem";
 import { GPUTextureCache } from "@/lib/gpuTextureCache";
 import { PreviewQualityManager, PreviewQualityTier } from "@/lib/preview/PreviewQualityManager";
 import { cn } from "@/lib/utils";
-import type { EvaluatedMediaLayer } from "@/core/evaluation/types";
+// import type { EvaluatedMediaLayer } from "@/core/evaluation/types";
 import { AspectRatio, PREVIEW_ASPECT_LABEL } from "@/types";
 import { AspectMenuRow } from "../ui/AspectRatio";
 import { formatTime } from "@/lib/timeFormatting";
@@ -53,31 +53,31 @@ const CANVAS_DIMENSIONS: Record<Exclude<AspectRatio, "original">, { width: numbe
   "4:5": { width: 1080, height: 1350 },
 };
 
-function previewAspectWidthOverHeight(preset: AspectRatio, canvasWidth: number, canvasHeight: number): number {
-  const ch = Math.max(1, canvasHeight);
-  if (preset === "original") {
-    return canvasWidth / ch;
-  }
-  return PREVIEW_ASPECT_RATIO[preset] ?? canvasWidth / ch;
-}
+// function previewAspectWidthOverHeight(preset: AspectRatio, canvasWidth: number, canvasHeight: number): number {
+//   const ch = Math.max(1, canvasHeight);
+//   if (preset === "original") {
+//     return canvasWidth / ch;
+//   }
+//   return PREVIEW_ASPECT_RATIO[preset] ?? canvasWidth / ch;
+// }
 
-function resolveOriginalPreviewAspect(layers: readonly { mediaId: string }[], mediaAssets: Array<{ id: string; width?: number; height?: number }>, canvasWidth: number, canvasHeight: number): number {
-  // Always return sequence aspect ratio
-  // The sequence is the coordinate universe - it doesn't change based on clips
-  return canvasWidth / Math.max(1, canvasHeight);
-}
+// function resolveOriginalPreviewAspect(layers: readonly { mediaId: string }[], mediaAssets: Array<{ id: string; width?: number; height?: number }>, canvasWidth: number, canvasHeight: number): number {
+//   // Always return sequence aspect ratio
+//   // The sequence is the coordinate universe - it doesn't change based on clips
+//   return canvasWidth / Math.max(1, canvasHeight);
+// }
 
-/** Largest rectangle with aspect W/H = R inside the panel. */
-function previewViewportSize(panelWidth: number, panelHeight: number, widthOverHeight: number): { vw: number; vh: number } {
-  const R = widthOverHeight;
-  let vw = Math.min(panelWidth, panelHeight * R);
-  let vh = vw / R;
-  if (vh > panelHeight + 0.5) {
-    vh = panelHeight;
-    vw = vh * R;
-  }
-  return { vw: Math.max(1, vw), vh: Math.max(1, vh) };
-}
+// /** Largest rectangle with aspect W/H = R inside the panel. */
+// function previewViewportSize(panelWidth: number, panelHeight: number, widthOverHeight: number): { vw: number; vh: number } {
+//   const R = widthOverHeight;
+//   let vw = Math.min(panelWidth, panelHeight * R);
+//   let vh = vw / R;
+//   if (vh > panelHeight + 0.5) {
+//     vh = panelHeight;
+//     vw = vh * R;
+//   }
+//   return { vw: Math.max(1, vw), vh: Math.max(1, vh) };
+// }
 
 function PreviewAspectShapeIcon({ widthOverHeight }: { widthOverHeight: number }) {
   const max = 22;
@@ -102,43 +102,43 @@ export const PreviewPanel: React.FC = () => {
     return <SourcePreview />;
   }
 
-  // Otherwise show program (timeline) preview
   return <ProgramPreview />;
 };
 
 const ProgramPreview: React.FC = () => {
-  // Imperative clock (throttled UI snapshots, 10fps)
-  const clockState = usePlaybackClock();
-  const { play, pause, seek, setSpeed, setDuration, setFrameRate } = usePlaybackControls();
-  const { play: transportPlay, pause: transportPause, seek: transportSeek, setActiveContext } = useTransportControls();
-  const clock = getPlaybackClock();
-
+  // =========================================================================
+  // 1. SELECTORS & STATE SUBSCRIPTIONS (Strictly first)
+  // =========================================================================
   const project = useProjectStore((s) => s.project);
   const updateProject = useProjectStore((s) => s.updateProject);
   const mediaAssets = useProjectStore((s) => s.mediaAssets);
   const tracks = useTimelineStore((s) => s.tracks);
   const clips = useTimelineStore((s) => s.clips);
-  const clearSelection = useUIStore((s) => s.clearSelection);
   const epoch = useTimelineStore((s) => s.epoch);
+  const clearSelection = useUIStore((s) => s.clearSelection);
   const { previewViewport } = useUIStore();
-  const containerRef = useRef<HTMLDivElement>(null);
-  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const activeSession = useSyncExternalStore(subscribeToSessionChanges, getActiveSessionOrNull, () => null);
+
+  // =========================================================================
+  // 2. CORE REACT & PLAYBACK HOOKS
+  // =========================================================================
+  const clockState = usePlaybackClock();
+  const clock = getPlaybackClock();
+  const { seek, setSpeed, setDuration, setFrameRate } = usePlaybackControls();
+  const { play: transportPlay, pause: transportPause, setActiveContext } = useTransportControls();
+
+  // =========================================================================
+  // 3. STATE DECLARATIONS (useState)
+  // =========================================================================
   const [isMuted, setIsMuted] = useState(false);
   const [volume, setVolume] = useState(100);
   const [dimensions, setDimensions] = useState({ width: 0, height: 0 });
-  /** fit = letterbox full canvas; fill = zoom canvas to cover panel (crop edges). */
   const [previewScaleMode, setPreviewScaleMode] = useState<"fit" | "fill">("fit");
   const [previewAspectPreset, setPreviewAspectPreset] = useState<AspectRatio>("original");
   const [aspectMenuOpen, setAspectMenuOpen] = useState(false);
   const [speedMenuOpen, setSpeedMenuOpen] = useState(false);
-  const aspectMenuRef = useRef<HTMLDivElement>(null);
-  const speedMenuRef = useRef<HTMLDivElement>(null);
-  const [useCanvasPreview] = useState(true); // Canvas is authoritative visual output
-  const gpuCacheRef = useRef<GPUTextureCache | null>(null);
-  const gpuFallbackRef = useRef(false); // true if WebGL2 unavailable → use Canvas2D
-  const qualityManagerRef = useRef<PreviewQualityManager | null>(null);
-  const qualityManagerSigRef = useRef<string>("");
   const [showTelemetry, setShowTelemetry] = useState(false);
+  const [useCanvasPreview] = useState(true);
   const [telemetryStats, setTelemetryStats] = useState<{
     avgEvaluationTimeMs: number;
     avgRasterTimeMs: number;
@@ -148,62 +148,167 @@ const ProgramPreview: React.FC = () => {
     droppedFrames: number;
     driftMagnitude: number;
   } | null>(null);
+
+  // =========================================================================
+  // 4. REF DECLARATIONS (useRef)
+  // =========================================================================
+  const containerRef = useRef<HTMLDivElement>(null);
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const aspectMenuRef = useRef<HTMLDivElement>(null);
+  const speedMenuRef = useRef<HTMLDivElement>(null);
+  const gpuCacheRef = useRef<GPUTextureCache | null>(null);
+  const gpuFallbackRef = useRef(false);
+  const qualityManagerRef = useRef<PreviewQualityManager | null>(null);
+  const qualityManagerSigRef = useRef<string>("");
   const telemetryRef = useRef(telemetryStats);
   const lastTelemetryFlushRef = useRef(0);
   const showTelemetryRef = useRef(showTelemetry);
-  showTelemetryRef.current = showTelemetry;
-
   const droppedFramesRef = useRef(0);
   const maxDriftRef = useRef(0);
-  const activeSession = useSyncExternalStore(subscribeToSessionChanges, getActiveSessionOrNull, () => null);
-
-  // Track original canvas dimensions when project loads
   const originalCanvasDimsRef = useRef<{ width: number; height: number } | null>(null);
+  const prevDurationRef = useRef<number>(0);
+  const prevFrameRateRef = useRef<number>(0);
+  
+  const renderStateRef = useRef({
+    clips,
+    tracks,
+    mediaAssets,
+    project,
+    epoch,
+    clock,
+    clockState,
+    canvasWidth: project?.canvasWidth ?? 1920,
+    canvasHeight: project?.canvasHeight ?? 1080,
+    displayWidth: 0,
+    displayHeight: 0,
+    dpr: window.devicePixelRatio || 1,
+  });
+
+  // Sync refs on every render
+  showTelemetryRef.current = showTelemetry;
+  renderStateRef.current.clips = clips;
+  renderStateRef.current.tracks = tracks;
+  renderStateRef.current.mediaAssets = mediaAssets;
+  renderStateRef.current.project = project;
+  renderStateRef.current.epoch = epoch;
+  renderStateRef.current.clock = clock;
+  renderStateRef.current.clockState = clockState;
+  renderStateRef.current.dpr = window.devicePixelRatio || 1;
+
+  // =========================================================================
+  // 5. VIEWPORT CONTROL HOOKS & DERIVATIONS
+  // =========================================================================
+  const canvasWidth = project?.canvasWidth ?? 1920;
+  const canvasHeight = project?.canvasHeight ?? 1080;
+
+  useViewportKeyboardShortcuts(canvasWidth, canvasHeight, dimensions.width, dimensions.height);
+  useViewportWheelZoom(containerRef as React.RefObject<HTMLElement>);
+  const { isPanning, spacePressed } = useViewportPan(containerRef as React.RefObject<HTMLElement>);
+
+  // =========================================================================
+  // 6. DERIVED MEMOIZED VALUES (useMemo)
+  // =========================================================================
+  const displayTransform = useMemo(() => {
+    return calculateDisplayTransform(
+      { width: canvasWidth, height: canvasHeight },
+      previewViewport,
+      dimensions.width,
+      dimensions.height,
+      previewScaleMode
+    );
+  }, [canvasWidth, canvasHeight, previewViewport, dimensions.width, dimensions.height, previewScaleMode]);
+
+  const { scale, offsetX, offsetY, displayWidth, displayHeight } = displayTransform;
+
+  // Sync derived display width/height to the render state ref
+  renderStateRef.current.displayWidth = displayWidth;
+  renderStateRef.current.displayHeight = displayHeight;
+  renderStateRef.current.canvasWidth = canvasWidth;
+  renderStateRef.current.canvasHeight = canvasHeight;
+
+  const scene = useMemo(() => {
+    return evaluateSceneCached(clockState.time, clips, tracks, mediaAssets, project ?? null, epoch);
+  }, [tracks, clips, mediaAssets, clockState.time, project, epoch]);
+
+  // =========================================================================
+  // 7. EVENT HANDLERS & CALLBACKS (useCallback)
+  // =========================================================================
+  const handlePreviewPointerDownCapture = useCallback(
+    (e: React.PointerEvent<HTMLDivElement>) => {
+      if (e.button !== 0) return;
+      if (isPanning || spacePressed) return;
+      const target = e.target as HTMLElement | null;
+      if (!target) return;
+      if (target.closest("[data-transform-handle]")) return;
+      if (target.closest("[data-playhead]")) return;
+      clearSelection();
+    },
+    [clearSelection, isPanning, spacePressed]
+  );
+
+  const selectAspectPreset = useCallback(
+    (p: AspectRatio) => {
+      setPreviewAspectPreset(p);
+      setAspectMenuOpen(false);
+
+      if (!project) return;
+
+      if (p === "original") {
+        if (originalCanvasDimsRef.current) {
+          updateProject({
+            canvasWidth: originalCanvasDimsRef.current.width,
+            canvasHeight: originalCanvasDimsRef.current.height,
+            aspectRatio: "original",
+          });
+        }
+      } else {
+        const dims = CANVAS_DIMENSIONS[p];
+        updateProject({
+          canvasWidth: dims.width,
+          canvasHeight: dims.height,
+          aspectRatio: p,
+        });
+      }
+    },
+    [project, updateProject]
+  );
+
+  // =========================================================================
+  // 8. SIDE EFFECTS (useEffect & useLayoutEffect)
+  // =========================================================================
 
   useEffect(() => {
     if (project && !originalCanvasDimsRef.current) {
-      // Store original dimensions on first load
       originalCanvasDimsRef.current = {
         width: project.canvasWidth,
         height: project.canvasHeight,
       };
     }
-  }, [project?.id]); // Only run when project changes
+  }, [project?.id]);
 
-  // Sync preview aspect preset with project aspect ratio when project loads
   useEffect(() => {
     if (project?.aspectRatio) {
       setPreviewAspectPreset(project.aspectRatio);
     }
-  }, [project?.id, project?.aspectRatio]); // Re-run when project changes
-
-  // Initialize clock with project settings (only when they actually change)
-  const prevDurationRef = useRef<number>(0);
-  const prevFrameRateRef = useRef<number>(0);
+  }, [project?.id, project?.aspectRatio]);
 
   useEffect(() => {
     if (!project) return;
-
-    // Calculate timeline duration from clips
     const maxEndTime = clips.reduce((max, clip) => {
       const endTime = clip.startTime + clip.duration;
       return Math.max(max, endTime);
     }, 0);
-
-    const newDuration = Math.max(maxEndTime, 10); // Minimum 10 seconds
+    const newDuration = Math.max(maxEndTime, 10);
     const newFrameRate = project.frameRate || 30;
-
-    // Only update if values actually changed
     if (newDuration !== prevDurationRef.current) {
       setDuration(newDuration);
       prevDurationRef.current = newDuration;
     }
-
     if (newFrameRate !== prevFrameRateRef.current) {
       setFrameRate(newFrameRate);
       prevFrameRateRef.current = newFrameRate;
     }
-  }, [project, clips]);
+  }, [project, clips, setDuration, setFrameRate]);
 
   useEffect(() => {
     if (!aspectMenuOpen) return;
@@ -232,126 +337,51 @@ const ProgramPreview: React.FC = () => {
       if (!containerRef.current) return;
       setDimensions({ width: containerRef.current.clientWidth, height: containerRef.current.clientHeight });
     };
-
-    const resizeObserver = new ResizeObserver(() => {
-      updateDimensions();
-      // Force canvas to re-render current frame after resize
-      // The canvas rendering effect will restart due to displayWidth/displayHeight changes
-    });
-
-    // Also listen to window resize and fullscreen events for more reliable updates
-    const handleResize = () => {
-      updateDimensions();
-    };
-
+    const resizeObserver = new ResizeObserver(updateDimensions);
     const handleFullscreenChange = () => {
-      // Delay to ensure layout has settled after fullscreen transition
       setTimeout(updateDimensions, 100);
-      // Additional update after animation completes
       setTimeout(updateDimensions, 300);
     };
-
-    if (containerRef.current) {
-      resizeObserver.observe(containerRef.current);
-      setTimeout(updateDimensions, 0);
-    }
-
-    window.addEventListener("resize", handleResize);
+    if (containerRef.current) resizeObserver.observe(containerRef.current);
+    window.addEventListener("resize", updateDimensions);
     document.addEventListener("fullscreenchange", handleFullscreenChange);
-    document.addEventListener("webkitfullscreenchange", handleFullscreenChange); // Safari
-
+    document.addEventListener("webkitfullscreenchange", handleFullscreenChange);
     return () => {
       resizeObserver.disconnect();
-      window.removeEventListener("resize", handleResize);
+      window.removeEventListener("resize", updateDimensions);
       document.removeEventListener("fullscreenchange", handleFullscreenChange);
       document.removeEventListener("webkitfullscreenchange", handleFullscreenChange);
     };
-  }, [project]);
+  }, []);
 
-  // Scene evaluation (for UI and initial render)
-  const scene = useMemo(() => evaluateSceneCached(clockState.time, clips, tracks, mediaAssets, project ?? null, epoch), [tracks, clips, mediaAssets, clockState.time, project, epoch]);
+  useEffect(() => {
+    if (!project) return;
+    const qmSig = `${project.id}:${canvasWidth}x${canvasHeight}`;
+    const dprVal = window.devicePixelRatio || 1;
+    if (!qualityManagerRef.current || qualityManagerSigRef.current !== qmSig) {
+      qualityManagerRef.current = new PreviewQualityManager({
+        sequenceWidth: canvasWidth,
+        sequenceHeight: canvasHeight,
+        viewportWidth: Math.floor(displayWidth),
+        viewportHeight: Math.floor(displayHeight),
+        dpr: dprVal,
+      });
+      qualityManagerSigRef.current = qmSig;
+    } else {
+      qualityManagerRef.current.updateViewport(Math.floor(displayWidth), Math.floor(displayHeight), dprVal);
+    }
+  }, [project, canvasWidth, canvasHeight, displayWidth, displayHeight]);
 
-  // Track video/audio clips for engine-side media pool sync
-  const videoClips = useMemo(() => {
-    return clips.filter((clip) => {
-      const asset = mediaAssets.find((a) => a.id === clip.mediaId);
-      return asset?.type === "video";
-    });
-  }, [clips, mediaAssets]);
-
-  const audioClips = useMemo(() => {
-    return clips.filter((clip) => {
-      const asset = mediaAssets.find((a) => a.id === clip.mediaId);
-      return asset?.type === "audio";
-    });
-  }, [clips, mediaAssets]);
-
-  // Calculate display dimensions for canvas with viewport transform
-  const canvasWidth = project?.canvasWidth ?? 1920;
-  const canvasHeight = project?.canvasHeight ?? 1080;
-
-  // Calculate display transform with viewport zoom/pan
-  const displayTransform = useMemo(() => {
-    return calculateDisplayTransform({ width: canvasWidth, height: canvasHeight }, previewViewport, dimensions.width, dimensions.height, previewScaleMode);
-  }, [canvasWidth, canvasHeight, previewViewport, dimensions.width, dimensions.height, previewScaleMode]);
-
-  const { scale, offsetX, offsetY, displayWidth, displayHeight } = displayTransform;
-
-  // Add viewport control hooks
-  useViewportKeyboardShortcuts(canvasWidth, canvasHeight, dimensions.width, dimensions.height);
-  useViewportWheelZoom(containerRef as React.RefObject<HTMLElement>);
-  const { isPanning, spacePressed } = useViewportPan(containerRef as React.RefObject<HTMLElement>);
-
-  const handlePreviewPointerDownCapture = useCallback(
-    (e: React.PointerEvent<HTMLDivElement>) => {
-      if (e.button !== 0) return;
-      if (isPanning || spacePressed) return;
-      const target = e.target as HTMLElement | null;
-      if (!target) return;
-      // Keep selection when interacting with transform handles/surfaces.
-      if (target.closest("[data-transform-handle]")) return;
-      // Do not interfere with playhead interactions.
-      if (target.closest("[data-playhead]")) return;
-      // Clicking blank preview area should deselect active clip(s).
-      clearSelection();
-    },
-    [clearSelection, isPanning, spacePressed],
-  );
-
-  // Preview Quality Manager — prevents 4K × DPR VRAM explosion
-  const dpr = window.devicePixelRatio || 1;
-  const qmSig = `${project?.id ?? "no-project"}:${canvasWidth}x${canvasHeight}`;
-  if (project && (!qualityManagerRef.current || qualityManagerSigRef.current !== qmSig)) {
-    qualityManagerRef.current = new PreviewQualityManager({
-      sequenceWidth: canvasWidth,
-      sequenceHeight: canvasHeight,
-      viewportWidth: Math.floor(displayWidth),
-      viewportHeight: Math.floor(displayHeight),
-      dpr,
-    });
-    qualityManagerSigRef.current = qmSig;
-  }
-  if (qualityManagerRef.current) {
-    qualityManagerRef.current.updateViewport(Math.floor(displayWidth), Math.floor(displayHeight), dpr);
-  }
-
-  // GPU cache initialization — create once, reuse across resizes and state changes.
-  // GPU resources survive layout changes; only disposed on unmount.
   useEffect(() => {
     if (!useCanvasPreview || !canvasRef.current || gpuFallbackRef.current) return;
-
-    // Already initialized — reuse existing cache
     if (gpuCacheRef.current) return;
-
     try {
       gpuCacheRef.current = new GPUTextureCache(canvasRef.current);
     } catch {
-      // WebGL2 unavailable — fall back to Canvas2D permanently
       gpuFallbackRef.current = true;
     }
   }, [useCanvasPreview]);
 
-  // GPU cache disposal — only on unmount
   useEffect(() => {
     return () => {
       if (gpuCacheRef.current) {
@@ -361,194 +391,127 @@ const ProgramPreview: React.FC = () => {
     };
   }, []);
 
-  // Canvas rendering - INDEPENDENT RAF LOOP (not tied to React state)
-  // GPU-first: uploads ImageBitmaps as WebGL2 textures for zero-copy reuse.
-  // Falls back to Canvas2D if WebGL2 is unavailable.
   useEffect(() => {
     if (!useCanvasPreview || !canvasRef.current || !project) return;
-
     const canvas = canvasRef.current;
-
     if (displayWidth === 0 || displayHeight === 0) return;
-
-    // Apply DPR to canvas backing store for crisp rendering on Retina/HiDPI.
-    // CSS size stays at displayWidth × displayHeight; pixel buffer is DPR-scaled.
     const canvasDpr = window.devicePixelRatio || 1;
     const backingW = Math.round(displayWidth * canvasDpr);
     const backingH = Math.round(displayHeight * canvasDpr);
-    canvas.width = backingW;
-    canvas.height = backingH;
-
-    // ── Resolve rendering context (GPU cache persists across re-runs) ──
+    if (canvas.width !== backingW || canvas.height !== backingH) {
+      canvas.width = backingW;
+      canvas.height = backingH;
+    }
     const gpuCache = gpuCacheRef.current;
     let ctx2d: CanvasRenderingContext2D | null = null;
-
     if (!gpuCache) {
       ctx2d = canvas.getContext("2d");
       if (ctx2d) {
-        // Scale context so subsequent draws use CSS-pixel coordinates
         ctx2d.setTransform(canvasDpr, 0, 0, canvasDpr, 0, 0);
         ctx2d.clearRect(0, 0, displayWidth, displayHeight);
       }
     }
-
-    // Get scheduler and update timeline state
     const scheduler = getFrameScheduler();
-    scheduler.updateTimeline(clips, tracks, mediaAssets, project, epoch);
-
     let rafId: number | null = null;
     let isActive = true;
     let isRendering = false;
     let lastJobId: string | null = null;
-
-    // GPU memory limit for preview frame textures (128 MB)
     const GPU_MEMORY_LIMIT_MB = 128;
-
-    // Independent render loop (reads clock imperatively)
     const renderLoop = () => {
       if (!isActive) return;
-
-      // Schedule next tick regardless of whether we render this frame
       rafId = requestAnimationFrame(renderLoop);
-
-      // Drop frame if still rendering a previous frame
       if (isRendering) {
         droppedFramesRef.current++;
         return;
       }
-
       isRendering = true;
-      const timeToRender = clock.time;
-
-      // Select quality tier based on playback/interaction state
+      const state = renderStateRef.current;
+      const timeToRender = state.clock.time;
+      scheduler.updateTimeline(state.clips, state.tracks, state.mediaAssets, state.project, state.epoch);
       const qm = qualityManagerRef.current;
-      const isPlaying = clockState.state === "playing";
+      const isPlaying = state.clockState.state === "playing";
       const qualityTier = qm ? qm.selectTierForInteraction(isPlaying, false, false) : PreviewQualityTier.Idle;
-      const profile = qm ? qm.getRenderProfile(qualityTier) : { maxWidth: canvasWidth, maxHeight: canvasHeight, dprScale: dpr, useDpr: true };
-
-      // Check GPU texture cache for this frame (skip scheduler entirely on cache hit)
-      // Cache key uses render dimensions (what we render) not display dimensions (what we show)
+      const profile = qm ? qm.getRenderProfile(qualityTier) : { maxWidth: state.canvasWidth, maxHeight: state.canvasHeight, dprScale: state.dpr, useDpr: true };
       if (gpuCache) {
         const renderW = profile.maxWidth;
         const renderH = profile.maxHeight;
-        const cacheKey = `preview:${project.id}:${epoch}:${timeToRender.toFixed(3)}:${renderW}x${renderH}:${dpr}`;
+        const cacheKey = `preview:${state.project?.id}:${state.epoch}:${timeToRender.toFixed(3)}:${renderW}x${renderH}:${state.dpr}`;
         if (gpuCache.hasTexture(cacheKey)) {
           gpuCache.clear();
-          // Render full-resolution texture scaled down to display size
-          gpuCache.renderTexture(cacheKey, 0, 0, displayWidth, displayHeight);
+          gpuCache.renderTexture(cacheKey, 0, 0, state.displayWidth, state.displayHeight);
           isRendering = false;
           return;
         }
       }
-
-      // Cancel previous job if still pending to prevent queue buildup
-      if (lastJobId) {
-        scheduler.cancel(lastJobId);
-      }
-
-      // Build map of active video elements to bypass resource decoding
+      if (lastJobId) scheduler.cancel(lastJobId);
       const session = getActiveSessionOrNull();
       const activeVideoElements = session?.getPreviewVideoElements() ?? new Map<string, HTMLVideoElement>();
-
-      // Schedule frame render at quality-manager-capped resolution
-      // Prevents 4K × DPR VRAM explosion while maintaining visual fidelity
       const jobId = scheduler.schedule({
         time: timeToRender,
-        resolution: {
-          width: profile.maxWidth,
-          height: profile.maxHeight,
-        },
+        resolution: { width: profile.maxWidth, height: profile.maxHeight },
         pixelRatio: profile.useDpr ? profile.dprScale : 1.0,
         outputFormat: "imagebitmap",
         priority: "realtime",
         videoElements: activeVideoElements,
       });
       lastJobId = jobId;
-
-      scheduler
-        .wait(jobId)
-        .then((result) => {
-          isRendering = false;
-          if (!isActive) return;
-
-          if (result.data instanceof ImageBitmap) {
-            if (gpuCache) {
-              // GPU path: upload capped-resolution bitmap as texture, render scaled down to display size
-              const cacheKey = `preview:${project.id}:${epoch}:${timeToRender.toFixed(3)}:${profile.maxWidth}x${profile.maxHeight}:${dpr}`;
-              gpuCache.uploadTexture(cacheKey, result.data, result.data.width, result.data.height);
-              gpuCache.clear();
-              // Scale down from full canvas resolution to display size
-              gpuCache.renderTexture(cacheKey, 0, 0, displayWidth, displayHeight);
-              result.data.close();
-
-              // Evict LRU textures if GPU memory exceeds limit
-              gpuCache.evictLRU(GPU_MEMORY_LIMIT_MB);
-            } else if (ctx2d) {
-              // Canvas2D fallback path: center bitmap with aspect-ratio preservation
-              // Context transform already set to canvasDpr, so use CSS-pixel coords.
-              const bitmapW = result.data.width;
-              const bitmapH = result.data.height;
-              const fitScale = Math.min(displayWidth / bitmapW, displayHeight / bitmapH);
-              const drawW = bitmapW * fitScale;
-              const drawH = bitmapH * fitScale;
-              const ox = (displayWidth - drawW) / 2;
-              const oy = (displayHeight - drawH) / 2;
-              ctx2d.clearRect(0, 0, displayWidth, displayHeight);
-              ctx2d.drawImage(result.data, ox, oy, drawW, drawH);
-              result.data.close();
-            }
+      scheduler.wait(jobId).then((result) => {
+        isRendering = false;
+        if (!isActive) return;
+        const latestState = renderStateRef.current;
+        if (result.data instanceof ImageBitmap) {
+          if (gpuCache) {
+            const cacheKey = `preview:${latestState.project?.id}:${latestState.epoch}:${timeToRender.toFixed(3)}:${profile.maxWidth}x${profile.maxHeight}:${latestState.dpr}`;
+            gpuCache.uploadTexture(cacheKey, result.data, result.data.width, result.data.height);
+            gpuCache.clear();
+            gpuCache.renderTexture(cacheKey, 0, 0, latestState.displayWidth, latestState.displayHeight);
+            result.data.close();
+            gpuCache.evictLRU(GPU_MEMORY_LIMIT_MB);
+          } else if (ctx2d) {
+            const bitmapW = result.data.width;
+            const bitmapH = result.data.height;
+            const fitScale = Math.min(latestState.displayWidth / bitmapW, latestState.displayHeight / bitmapH);
+            const drawW = bitmapW * fitScale;
+            const drawH = bitmapH * fitScale;
+            const ox = (latestState.displayWidth - drawW) / 2;
+            const oy = (latestState.displayHeight - drawH) / 2;
+            ctx2d.clearRect(0, 0, latestState.displayWidth, latestState.displayHeight);
+            ctx2d.drawImage(result.data, ox, oy, drawW, drawH);
+            result.data.close();
           }
-
-          // Update telemetry (throttled to 4fps, only when visible)
-          const stats = scheduler.getStats();
-          telemetryRef.current = {
-            avgEvaluationTimeMs: stats.avgEvaluationTimeMs,
-            avgRasterTimeMs: stats.avgRasterTimeMs,
-            avgTotalTimeMs: stats.avgTotalTimeMs,
-            cacheHitRate: stats.cacheHitRate,
-            active: stats.active,
-            droppedFrames: droppedFramesRef.current,
-            driftMagnitude: maxDriftRef.current,
-          };
-          const now = performance.now();
-          if (showTelemetryRef.current && now - lastTelemetryFlushRef.current > 250) {
-            lastTelemetryFlushRef.current = now;
-            setTelemetryStats(telemetryRef.current);
-            maxDriftRef.current = 0;
-          }
-        })
-        .catch((error: Error) => {
-          isRendering = false;
-          if (error.message !== "Job cancelled" && isActive) {
-            console.error("Failed to render frame:", error);
-          }
-        });
+        }
+        const stats = scheduler.getStats();
+        telemetryRef.current = {
+          avgEvaluationTimeMs: stats.avgEvaluationTimeMs,
+          avgRasterTimeMs: stats.avgRasterTimeMs,
+          avgTotalTimeMs: stats.avgTotalTimeMs,
+          cacheHitRate: stats.cacheHitRate,
+          active: stats.active,
+          droppedFrames: droppedFramesRef.current,
+          driftMagnitude: maxDriftRef.current,
+        };
+        const now = performance.now();
+        if (showTelemetryRef.current && now - lastTelemetryFlushRef.current > 250) {
+          lastTelemetryFlushRef.current = now;
+          setTelemetryStats(telemetryRef.current);
+          maxDriftRef.current = 0;
+        }
+      }).catch((error: Error) => {
+        isRendering = false;
+        if (error.message !== "Job cancelled" && isActive) console.error("Failed to render frame:", error);
+      });
     };
-
-    // Start render loop
     rafId = requestAnimationFrame(renderLoop);
-
-    // Cleanup: stop render loop and cancel pending jobs (GPU cache survives)
     return () => {
       isActive = false;
-      if (rafId !== null) {
-        cancelAnimationFrame(rafId);
-      }
-      if (lastJobId) {
-        scheduler.cancel(lastJobId);
-      }
+      if (rafId !== null) cancelAnimationFrame(rafId);
+      if (lastJobId) scheduler.cancel(lastJobId);
     };
-  }, [useCanvasPreview, clips, tracks, mediaAssets, project, epoch, clock, displayWidth, displayHeight, canvasWidth, canvasHeight]);
+  }, [useCanvasPreview, project, displayWidth, displayHeight]);
 
-  // ── Sync preview media elements with engine pool ─────────────────────────
-  // The engine (PreviewMediaPool) owns all <video> and <audio> elements.
-  // React only tells it what should exist and what the current clock state is.
-  // We use useLayoutEffect so it syncs BEFORE the RAF render loop fires its first frame.
   useLayoutEffect(() => {
     const session = activeSession;
-
     if (!session) return;
-
     try {
       session.syncPreviewMedia(clips, mediaAssets, tracks, {
         time: clock.time,
@@ -576,33 +539,6 @@ const ProgramPreview: React.FC = () => {
     );
   }
 
-  const selectAspectPreset = (p: AspectRatio) => {
-    setPreviewAspectPreset(p);
-    setAspectMenuOpen(false);
-
-    if (!project) return;
-
-    // Handle "original" - restore to original canvas dimensions
-    if (p === "original") {
-      if (originalCanvasDimsRef.current) {
-        updateProject({
-          canvasWidth: originalCanvasDimsRef.current.width,
-          canvasHeight: originalCanvasDimsRef.current.height,
-          aspectRatio: "original",
-        });
-      }
-    } else {
-      // Update to preset dimensions
-      const dims = CANVAS_DIMENSIONS[p];
-      updateProject({
-        canvasWidth: dims.width,
-        canvasHeight: dims.height,
-        aspectRatio: p,
-      });
-    }
-  };
-
-  // Derive UI values from clock state
   const currentTime = clockState.time;
   const duration = clockState.duration;
   const isPlaying = clockState.state === "playing";
@@ -612,7 +548,6 @@ const ProgramPreview: React.FC = () => {
 
   return (
     <div className="flex-1 bg-bg flex flex-col min-h-0 rounded-tl-xl border-l border-t border-white/3">
-      {/* ── Header ─────────────────────────────────────────────────── */}
       <div className="flex items-center px-4 h-10 shrink-0 gap-2">
         <span className="text-[13px] font-semibold text-text-primary tracking-tight">Program Preview</span>
         <span className="text-[13px] text-text-muted">— Timeline</span>

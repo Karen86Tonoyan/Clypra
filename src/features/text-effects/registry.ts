@@ -20,7 +20,8 @@
  */
 
 import type { TextEffectDefinition } from "./types/types";
-import { getFontFamilyStack } from "./lib/helpers";
+import { resolveFontFamilyName } from "./lib/helpers";
+
 
 // ─── Internal registry state ──────────────────────────────────────────────────
 
@@ -89,8 +90,8 @@ export function _buildConfig(effect: TextEffectDefinition, text: string, fontSiz
     height: canvasHeight,
     text,
 
-    // Font — resolve through getFontFamilyStack so engines receive the correct CSS name
-    fontFamily: getFontFamilyStack(effect.font.family),
+    // Font — resolve to exact Fontsource name (bare, no quotes — engines quote it themselves)
+    fontFamily: resolveFontFamilyName(effect.font.family),
     fontWeight: effect.font.weight,
     fontStyle: effect.font.style,
     fontSize,

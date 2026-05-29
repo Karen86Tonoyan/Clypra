@@ -17,7 +17,7 @@ import { useUIStore } from "@/store/uiStore";
 import { useTimelineStore } from "@/store/timelineStore";
 import { useHistoryStore } from "@/store/historyStore";
 import { TransformClipCommand } from "@/core/history/commands/TransformCommand";
-import { calculateTransform, getDefaultConstraints } from "@/lib/transform/calculator";
+import { calculateTransform, getDefaultConstraints, getCursorForHandle } from "@/lib/transform/calculator";
 import { screenToCanvas, canvasToScreen, hitTestClip, type ViewportTransform } from "@/lib/coordinateSystem";
 import type { TransformHandle } from "@/types";
 
@@ -28,6 +28,33 @@ const traceSelect = (...args: unknown[]) => {
 };
 const CENTER_GUIDE_SNAP_PX = 8;
 const CENTER_MAGNET_SNAP_PX = 12;
+
+/**
+ * Map cursor string to CSS class for Tauri compatibility.
+ * Tauri desktop apps have issues with inline cursor styles, so we use CSS classes instead.
+ */
+function getCursorClass(cursor: string): string {
+  const cursorMap: Record<string, string> = {
+    "nwse-resize": "cursor-nwse-resize",
+    "nesw-resize": "cursor-nesw-resize",
+    "ns-resize": "cursor-ns-resize",
+    "ew-resize": "cursor-ew-resize",
+    "n-resize": "cursor-ns-resize",
+    "s-resize": "cursor-ns-resize",
+    "e-resize": "cursor-ew-resize",
+    "w-resize": "cursor-ew-resize",
+    "nw-resize": "cursor-nwse-resize",
+    "ne-resize": "cursor-nesw-resize",
+    "sw-resize": "cursor-nesw-resize",
+    "se-resize": "cursor-nwse-resize",
+    "col-resize": "cursor-col-resize",
+    "row-resize": "cursor-row-resize",
+    move: "cursor-move",
+    grab: "cursor-grab",
+    grabbing: "cursor-grabbing",
+  };
+  return cursorMap[cursor] || "";
+}
 
 interface TransformOverlayProps {
   /** Canvas dimensions for coordinate conversion */
@@ -73,6 +100,8 @@ export const TransformOverlay: React.FC<TransformOverlayProps> = ({ canvasWidth,
   const dragCursorRef = useRef<string | null>(null);
   /** Start angle (radians) for rotation drag — prevents initial snap */
   const startAngleRef = useRef<number | undefined>(undefined);
+  /** Start font size for text clips — supports proportional dynamic scaling */
+  const startFontSizeRef = useRef<number | undefined>(undefined);
 
   // Get the first selected clip (multi-select transform comes later)
   const selectedClip = clips.find((c) => c.id === selectedClipIds[0]);
@@ -192,21 +221,31 @@ export const TransformOverlay: React.FC<TransformOverlayProps> = ({ canvasWidth,
         startAngleRef.current = undefined;
       }
 
+      // Capture starting font size for text clips so we can scale text dynamically
+      if ("text" in selectedClip) {
+        startFontSizeRef.current = (selectedClip as any).fontSize;
+      } else {
+        startFontSizeRef.current = undefined;
+      }
+
       const dragCursor: Record<TransformHandle, string> = {
         move: "move",
-        nw: "nw-resize",
-        ne: "ne-resize",
-        sw: "sw-resize",
-        se: "se-resize",
-        n: "n-resize",
-        s: "s-resize",
-        e: "e-resize",
-        w: "w-resize",
+        nw: "nwse-resize",
+        ne: "nesw-resize",
+        sw: "nesw-resize",
+        se: "nwse-resize",
+        n: "ns-resize",
+        s: "ns-resize",
+        e: "ew-resize",
+        w: "ew-resize",
         rotate: "grabbing",
       };
       dragCursorRef.current = dragCursor[handle] ?? null;
       if (dragCursorRef.current) {
-        document.body.style.cursor = dragCursorRef.current;
+        const cursorClass = getCursorClass(dragCursorRef.current);
+        if (cursorClass) {
+          document.body.classList.add(cursorClass);
+        }
       }
 
       startTransform({
@@ -277,6 +316,19 @@ export const TransformOverlay: React.FC<TransformOverlayProps> = ({ canvasWidth,
           newTransform.y = canvasCenterY - nextH / 2;
         }
       }
+
+      // Automatically scale the text font size proportionally with the height during resizing.
+      // This prevents the text from being clipped or cut off.
+      if (startFontSizeRef.current !== undefined) {
+        const startHeight = activeTransform.startTransform.height || 1;
+        const newHeight = newTransform.height ?? activeTransform.startTransform.height;
+        const heightScale = newHeight / startHeight;
+
+        // Dynamic fontSize scaling based on height scale
+        const newFontSize = Math.max(10, Math.min(300, Math.round(startFontSizeRef.current * heightScale)));
+        (newTransform as any).fontSize = newFontSize;
+      }
+
       traceSelect("transform mousemove", { clipId: activeTransform.clipId, handle: activeTransform.handle, x: newTransform.x, y: newTransform.y, width: newTransform.width, height: newTransform.height });
 
       // Optimistic update (no history yet)
@@ -291,7 +343,10 @@ export const TransformOverlay: React.FC<TransformOverlayProps> = ({ canvasWidth,
 
     setIsDragging(false);
     if (dragCursorRef.current) {
-      document.body.style.cursor = "";
+      const cursorClass = getCursorClass(dragCursorRef.current);
+      if (cursorClass) {
+        document.body.classList.remove(cursorClass);
+      }
       dragCursorRef.current = null;
     }
 
@@ -303,8 +358,8 @@ export const TransformOverlay: React.FC<TransformOverlayProps> = ({ canvasWidth,
     }
 
     // Commit to history
-    const oldTransform = activeTransform.startTransform;
-    const newTransform = {
+    const oldTransform: Record<string, any> = { ...activeTransform.startTransform };
+    const newTransform: Record<string, any> = {
       x: finalClip.x,
       y: finalClip.y,
       width: finalClip.width,
@@ -312,8 +367,13 @@ export const TransformOverlay: React.FC<TransformOverlayProps> = ({ canvasWidth,
       rotation: finalClip.rotation,
     };
 
+    if (startFontSizeRef.current !== undefined) {
+      oldTransform.fontSize = startFontSizeRef.current;
+      newTransform.fontSize = (finalClip as any).fontSize;
+    }
+
     // Only create command if something actually changed
-    const hasChanged = oldTransform.x !== newTransform.x || oldTransform.y !== newTransform.y || oldTransform.width !== newTransform.width || oldTransform.height !== newTransform.height || oldTransform.rotation !== newTransform.rotation;
+    const hasChanged = oldTransform.x !== newTransform.x || oldTransform.y !== newTransform.y || oldTransform.width !== newTransform.width || oldTransform.height !== newTransform.height || oldTransform.rotation !== newTransform.rotation || oldTransform.fontSize !== newTransform.fontSize;
 
     if (hasChanged) {
       execute(new TransformClipCommand(activeTransform.clipId, oldTransform, newTransform));
@@ -336,7 +396,9 @@ export const TransformOverlay: React.FC<TransformOverlayProps> = ({ canvasWidth,
 
   React.useEffect(() => {
     return () => {
-      document.body.style.cursor = "";
+      // Cleanup: remove all cursor classes on unmount
+      const cursorClasses = ["cursor-move", "cursor-nwse-resize", "cursor-nesw-resize", "cursor-ns-resize", "cursor-ew-resize", "cursor-grabbing"];
+      cursorClasses.forEach((cls) => document.body.classList.remove(cls));
     };
   }, []);
 
@@ -409,21 +471,48 @@ export const TransformOverlay: React.FC<TransformOverlayProps> = ({ canvasWidth,
         }}
       />
 
-      {/* Transform border - visual only */}
+      {/* Rotated transform container - groups border, move surface, and all handles
+          so they rotate together perfectly and stay aligned under rotation. */}
       <div
-        className="absolute border-2 pointer-events-none shadow-lg"
         style={{
+          position: "absolute",
           left: handleDisplayX,
           top: handleDisplayY,
           width: handleDisplayWidth,
           height: handleDisplayHeight,
           transform: `rotate(${rotation}deg)`,
           transformOrigin: "center",
-          borderColor: "var(--color-accent)",
-          boxShadow: "0 0 0 1px var(--color-border), 0 2px 8px rgba(0,0,0,0.3)",
           zIndex: 10,
         }}
-      />
+      >
+        {/* Sleek, professional semi-transparent white border with a sharp outer dark stroke */}
+        <div className="absolute border border-white inset-0 pointer-events-none transition-all duration-75" />
+
+        {/* Move surface - explicit drag target across full selected bounds */}
+        <div
+          className="absolute inset-0 cursor-move pointer-events-auto"
+          data-transform-handle="move"
+          style={{
+            background: "transparent",
+          }}
+          onMouseDown={(e) => handleMouseDown(e, "move")}
+        />
+
+        {/* Corner handles (centered exactly on the box vertices) */}
+        <Handle position="nw" onMouseDown={(e) => handleMouseDown(e, "nw")} left={0} top={0} width={handleDisplayWidth} height={handleDisplayHeight} rotation={rotation} />
+        <Handle position="ne" onMouseDown={(e) => handleMouseDown(e, "ne")} left={0} top={0} width={handleDisplayWidth} height={handleDisplayHeight} rotation={rotation} />
+        <Handle position="sw" onMouseDown={(e) => handleMouseDown(e, "sw")} left={0} top={0} width={handleDisplayWidth} height={handleDisplayHeight} rotation={rotation} />
+        <Handle position="se" onMouseDown={(e) => handleMouseDown(e, "se")} left={0} top={0} width={handleDisplayWidth} height={handleDisplayHeight} rotation={rotation} />
+
+        {/* Side handles (horizontal & vertical pills) */}
+        <Handle position="w" onMouseDown={(e) => handleMouseDown(e, "w")} left={0} top={0} width={handleDisplayWidth} height={handleDisplayHeight} rotation={rotation} />
+        <Handle position="e" onMouseDown={(e) => handleMouseDown(e, "e")} left={0} top={0} width={handleDisplayWidth} height={handleDisplayHeight} rotation={rotation} />
+        <Handle position="n" onMouseDown={(e) => handleMouseDown(e, "n")} left={0} top={0} width={handleDisplayWidth} height={handleDisplayHeight} rotation={rotation} />
+        <Handle position="s" onMouseDown={(e) => handleMouseDown(e, "s")} left={0} top={0} width={handleDisplayWidth} height={handleDisplayHeight} rotation={rotation} />
+
+        {/* Rotation handle - floating centered below the bottom edge with scale compensation */}
+        <Handle position="rotate" onMouseDown={(e) => handleMouseDown(e, "rotate")} scale={scale} left={0} top={0} width={handleDisplayWidth} height={handleDisplayHeight} rotation={rotation} />
+      </div>
 
       {/* Center alignment guides (visible during move/resize near center) */}
       {showVerticalCenterGuide && (
@@ -453,32 +542,22 @@ export const TransformOverlay: React.FC<TransformOverlayProps> = ({ canvasWidth,
         />
       )}
 
-      {/* Move surface - explicit drag target across full selected bounds */}
-      <div
-        className="absolute cursor-move"
-        data-transform-handle="move"
-        style={{
-          left: handleDisplayX,
-          top: handleDisplayY,
-          width: handleDisplayWidth,
-          height: handleDisplayHeight,
-          transform: `rotate(${rotation}deg)`,
-          transformOrigin: "center",
-          background: "transparent",
-          pointerEvents: "auto",
-          zIndex: 15,
-        }}
-        onMouseDown={(e) => handleMouseDown(e, "move")}
-      />
-
-      {/* Corner handles */}
-      <Handle position="nw" onMouseDown={(e) => handleMouseDown(e, "nw")} left={handleDisplayX} top={handleDisplayY} width={handleDisplayWidth} height={handleDisplayHeight} rotation={rotation} />
-      <Handle position="ne" onMouseDown={(e) => handleMouseDown(e, "ne")} left={handleDisplayX} top={handleDisplayY} width={handleDisplayWidth} height={handleDisplayHeight} rotation={rotation} />
-      <Handle position="sw" onMouseDown={(e) => handleMouseDown(e, "sw")} left={handleDisplayX} top={handleDisplayY} width={handleDisplayWidth} height={handleDisplayHeight} rotation={rotation} />
-      <Handle position="se" onMouseDown={(e) => handleMouseDown(e, "se")} left={handleDisplayX} top={handleDisplayY} width={handleDisplayWidth} height={handleDisplayHeight} rotation={rotation} />
-
-      {/* Rotation handle */}
-      <Handle position="rotate" onMouseDown={(e) => handleMouseDown(e, "rotate")} scale={scale} left={handleDisplayX} top={handleDisplayY} width={handleDisplayWidth} height={handleDisplayHeight} rotation={rotation} />
+      {/* Rotation degree indicator - shows current rotation angle when rotating */}
+      {isDragging && activeTransform?.handle === "rotate" && (
+        <div
+          className="absolute pointer-events-none"
+          style={{
+            zIndex: 15,
+            top: 10,
+            left: "50%",
+            transform: "translateX(-50%)",
+          }}
+        >
+          <div className="w-11 h-6 flex justify-center items-center rounded-sm text-sm font-semibold bg-accent/60 text-text-primary" style={{ backdropFilter: "blur(8px)" }}>
+            {Math.round(rotation)}°
+          </div>
+        </div>
+      )}
     </div>
   );
 };
@@ -498,41 +577,84 @@ interface HandleProps {
 const Handle: React.FC<HandleProps> = ({ position, onMouseDown, scale = 1, left, top, width, height, rotation }) => {
   const getHandleStyle = (): React.CSSProperties => {
     const handleSize = 10;
-    const handleInset = 2;
     const baseStyle: React.CSSProperties = {
       position: "absolute",
       width: `${handleSize}px`,
       height: `${handleSize}px`,
-      backgroundColor: "var(--color-text-primary)",
+      backgroundColor: "#ffffff",
+      border: "1px solid rgba(0, 0, 0, 0.25)",
       borderRadius: "50%",
-      // cursor: "default",
       transform: "translate(-50%, -50%)",
-      boxShadow: "0 2px 4px rgba(0,0,0,0.3)",
+      boxShadow: "0 2px 4px rgba(0, 0, 0, 0.18)",
       zIndex: 20000,
       pointerEvents: "auto",
     };
 
+    // Retrieve rotated cursor dynamically to align with NLE screen-space resizing
+    const cursor = getCursorForHandle(position, rotation);
+
     switch (position) {
       case "nw":
-        return { ...baseStyle, left: left + handleInset, top: top + handleInset, cursor: "nw-resize" };
+        return { ...baseStyle, left: left, top: top };
       case "ne":
-        return { ...baseStyle, left: left + width - handleInset, top: top + handleInset, cursor: "ne-resize" };
+        return { ...baseStyle, left: left + width, top: top };
       case "sw":
-        return { ...baseStyle, left: left + handleInset, top: top + height - handleInset, cursor: "sw-resize" };
+        return { ...baseStyle, left: left, top: top + height };
       case "se":
-        return { ...baseStyle, left: left + width - handleInset, top: top + height - handleInset, cursor: "se-resize" };
-      case "rotate": {
-        // Scale-compensated offset so the rotation handle stays at a constant
-        // visual distance (~30px) regardless of viewport zoom.
-        const offset = Math.max(20, Math.min(60, 30 / Math.max(0.1, scale)));
+        return { ...baseStyle, left: left + width, top: top + height };
+      case "w":
+        return {
+          ...baseStyle,
+          left: left,
+          top: top + height / 2,
+          width: "6px",
+          height: "14px",
+          borderRadius: "3px",
+        };
+      case "e":
+        return {
+          ...baseStyle,
+          left: left + width,
+          top: top + height / 2,
+          width: "6px",
+          height: "14px",
+          borderRadius: "3px",
+        };
+      case "n":
         return {
           ...baseStyle,
           left: left + width / 2,
-          top: top - offset,
-          backgroundColor: "var(--color-accent)",
-          cursor: "grab",
-          width: "16px",
-          height: "16px",
+          top: top,
+          width: "14px",
+          height: "6px",
+          borderRadius: "3px",
+        };
+      case "s":
+        return {
+          ...baseStyle,
+          left: left + width / 2,
+          top: top + height,
+          width: "14px",
+          height: "6px",
+          borderRadius: "3px",
+        };
+      case "rotate": {
+        // Scale-compensated offset so the rotation handle stays at a constant
+        // visual distance (~32px) below the bottom edge regardless of viewport zoom.
+        const offset = Math.max(24, Math.min(30, 32 / Math.max(0.1, scale)));
+        return {
+          ...baseStyle,
+          left: left + width / 2,
+          top: top + height + offset,
+          backgroundColor: "#ffffff",
+          border: "1px solid rgba(0, 0, 0, 0.12)",
+          borderRadius: "50%",
+          width: "20px",
+          height: "20px",
+          boxShadow: "0 3px 6px rgba(0, 0, 0, 0.16), 0 1px 3px rgba(0, 0, 0, 0.08)",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
         };
       }
       default:
@@ -541,27 +663,29 @@ const Handle: React.FC<HandleProps> = ({ position, onMouseDown, scale = 1, left,
   };
 
   const style = getHandleStyle();
-  const resolvedCursor = typeof style.cursor === "string" ? style.cursor : "default";
+  const cursor = getCursorForHandle(position, rotation);
+  const cursorClass = getCursorClass(cursor);
 
   return (
     <div
+      className={cursorClass}
       style={{
         ...style,
-        transform: `${style.transform ?? "translate(-50%, -50%)"} rotate(${rotation}deg)`,
+        transform: `${style.transform ?? "translate(-50%, -50%)"} rotate(${-rotation}deg)`,
         transformOrigin: "center",
       }}
       onMouseDown={onMouseDown}
-      onMouseEnter={() => {
-        document.body.style.setProperty("cursor", resolvedCursor, "important");
-      }}
-      onMouseMove={() => {
-        document.body.style.setProperty("cursor", resolvedCursor, "important");
-      }}
-      onMouseLeave={() => {
-        document.body.style.removeProperty("cursor");
-      }}
       data-transform-handle={position}
-    />
+    >
+      {position === "rotate" && (
+        <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ color: "#1a1a1a" }}>
+          <path d="M21 12a9 9 0 0 0-9-9 9.75 9.75 0 0 0-6.74 2.74L3 8" />
+          <path d="M3 3v5h5" />
+          <path d="M3 12a9 9 0 0 0 9 9 9.75 9.75 0 0 0 6.74-2.74L21 16" />
+          <path d="M16 16h5v5" />
+        </svg>
+      )}
+    </div>
   );
 };
 

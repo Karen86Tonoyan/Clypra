@@ -366,40 +366,27 @@ function rasterizeTextLayer(ctx: CanvasRenderingContext2D | OffscreenCanvasRende
         },
       };
       const fontSize = layer.fontSize * scaleY;
-      const totalHeight = layer.text.split("\n").length * fontSize * overriddenEffect.font.lineHeight;
-      let startY: number;
-      switch (layer.verticalAlign) {
-        case "top":
-          startY = -height / 2 + (fontSize * overriddenEffect.font.lineHeight) / 2;
-          break;
-        case "bottom":
-          startY = height / 2 - totalHeight + (fontSize * overriddenEffect.font.lineHeight) / 2;
-          break;
-        case "middle":
-        default:
-          startY = -totalHeight / 2 + (fontSize * overriddenEffect.font.lineHeight) / 2;
-          break;
-      }
-      let textX: number;
-      switch (layer.textAlign) {
-        case "left":
-          textX = -width / 2;
-          break;
-        case "right":
-          textX = width / 2;
-          break;
-        case "center":
-        default:
-          textX = 0;
-          break;
-      }
-      ctx.save();
-      ctx.beginPath();
-      ctx.rect(-width / 2, -height / 2, width, height);
-      ctx.clip();
 
-      renderTextEffectToContext(ctx, layer.text, overriddenEffect, fontSize, textX, startY + totalHeight / 2 - (fontSize * overriddenEffect.font.lineHeight) / 2, width, height);
-      ctx.restore();
+      // Text effects with panels, glows, and shadows need extra space beyond the text bounds
+      // Add padding to prevent clipping of effects
+      const effectPadding = fontSize * 0.5; // 50% of font size for effect overflow
+      const offW = Math.max(1, Math.ceil(width + effectPadding * 2));
+      const offH = Math.max(1, Math.ceil(height + effectPadding * 2));
+      const offscreen = canvasPool.acquire(offW, offH);
+      const offCtx = offscreen.getContext("2d", { alpha: true }) as OffscreenCanvasRenderingContext2D | null;
+      if (offCtx) {
+        // Ensure clean state (pooled canvases may retain previous transforms)
+        offCtx.setTransform(1, 0, 0, 1, 0, 0);
+        offCtx.clearRect(0, 0, offW, offH);
+
+        // Engine renders centered in its own (0, 0, offW, offH) space
+        renderTextEffectToContext(offCtx, layer.text, overriddenEffect, fontSize, 0, 0, offW, offH);
+
+        // Composite onto main canvas — context is at layer center
+        // Account for the extra padding when drawing
+        ctx.drawImage(offscreen, 0, 0, offW, offH, -width / 2 - effectPadding, -height / 2 - effectPadding, offW, offH);
+      }
+      canvasPool.release(offscreen);
       return;
     }
   }
