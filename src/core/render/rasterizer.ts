@@ -18,7 +18,9 @@
 import type { EvaluatedScene, EvaluatedMediaLayer, EvaluatedTextLayer } from "../evaluation/types";
 import { getResourceCache } from "../resources/ResourceCache";
 import { renderTextEffectToContext } from "../../features/text-effects/renderer";
-import { allTextEffects } from "../../features/text-effects/registry";
+import { _buildConfig } from "../../features/text-effects/registry";
+import { renderTextEffectCore, defaultConfig as engineDefaultConfig } from "@clypra/engine";
+import { useEffectsStore } from "../../features/text-effects/store/effectsStore";
 
 /**
  * Global pool for OffscreenCanvas to prevent GC stalls during rendering/export.
@@ -354,36 +356,30 @@ function drawLoadingPlaceholder(ctx: CanvasRenderingContext2D | OffscreenCanvasR
  * Preview MUST use this same code path.
  */
 function rasterizeTextLayer(ctx: CanvasRenderingContext2D | OffscreenCanvasRenderingContext2D, layer: EvaluatedTextLayer, width: number, height: number, scaleX: number, scaleY: number): void {
-  // If we have a styleId matching our core text effects, use core procedural renderer
+  // If we have a styleId, look up the full effect definition from the effects
+  // store cache (API-fetched definitions live here, allTextEffects is always empty).
   if (layer.styleId) {
-    const effect = allTextEffects.find((e) => e.id === layer.styleId);
-    if (effect) {
-      const overriddenEffect = {
-        ...effect,
-        font: {
-          ...effect.font,
-          family: layer.fontFamily || effect.font.family,
-        },
-      };
+    const effectDef = useEffectsStore.getState().definitions[layer.styleId];
+    if (effectDef) {
       const fontSize = layer.fontSize * scaleY;
-
-      // Text effects with panels, glows, and shadows need extra space beyond the text bounds
-      // Add padding to prevent clipping of effects
-      const effectPadding = fontSize * 0.5; // 50% of font size for effect overflow
+      const effectPadding = fontSize * 0.5;
       const offW = Math.max(1, Math.ceil(width + effectPadding * 2));
       const offH = Math.max(1, Math.ceil(height + effectPadding * 2));
       const offscreen = canvasPool.acquire(offW, offH);
       const offCtx = offscreen.getContext("2d", { alpha: true }) as OffscreenCanvasRenderingContext2D | null;
       if (offCtx) {
-        // Ensure clean state (pooled canvases may retain previous transforms)
         offCtx.setTransform(1, 0, 0, 1, 0, 0);
         offCtx.clearRect(0, 0, offW, offH);
 
-        // Engine renders centered in its own (0, 0, offW, offH) space
-        renderTextEffectToContext(offCtx, layer.text, overriddenEffect, fontSize, 0, 0, offW, offH, layer.time, layer.clipStartTime, layer.clipDuration);
+        // Use @clypra/engine to render — produces pixel-perfect results matching
+        // the source-of-truth engine used everywhere else in the pipeline.
+        const engineConfig = {
+          ...engineDefaultConfig,
+          ..._buildConfig(effectDef, layer.text, fontSize, offW, offH, layer.time, layer.clipStartTime, layer.clipDuration),
+          fontFamily: layer.fontFamily || effectDef.font?.family,
+        };
+        renderTextEffectCore(offCtx as unknown as CanvasRenderingContext2D, engineConfig);
 
-        // Composite onto main canvas — context is at layer center
-        // Account for the extra padding when drawing
         ctx.drawImage(offscreen, 0, 0, offW, offH, -width / 2 - effectPadding, -height / 2 - effectPadding, offW, offH);
       }
       canvasPool.release(offscreen);

@@ -1,6 +1,7 @@
+import { renderTextEffectCore, defaultConfig as engineDefaultConfig } from "@clypra/engine";
 import { applyFontConfig, wrapText, resolveFontFamilyName } from "./lib/helpers";
 import { TextEffectDefinition } from "./types/types";
-import { hasRegisteredEngine, renderRegisteredEffect } from "./registry";
+import { hasRegisteredEngine, renderRegisteredEffect, _buildConfig } from "./registry";
 
 /**
  * Core Canvas 2D Text Effects Rendering Context Engine.
@@ -9,19 +10,7 @@ import { hasRegisteredEngine, renderRegisteredEffect } from "./registry";
  * Effect dispatch is driven entirely by the registry — no per-effect if-blocks here.
  * To add a new effect: drop its file in effects/ and add two lines to registry.ts.
  */
-export const renderTextEffectToContext = (
-  ctx: CanvasRenderingContext2D | OffscreenCanvasRenderingContext2D,
-  text: string,
-  effect: TextEffectDefinition,
-  fontSize: number,
-  _x: number,
-  _y: number,
-  canvasWidth: number,
-  canvasHeight: number,
-  time?: number,
-  clipStartTime?: number,
-  clipDuration?: number
-) => {
+export const renderTextEffectToContext = (ctx: CanvasRenderingContext2D | OffscreenCanvasRenderingContext2D, text: string, effect: TextEffectDefinition, fontSize: number, _x: number, _y: number, canvasWidth: number, canvasHeight: number, time?: number, clipStartTime?: number, clipDuration?: number) => {
   // Overhaul context with a dynamic text animation interception wrapper
   const originalFillText = ctx.fillText;
   const originalStrokeText = ctx.strokeText;
@@ -33,12 +22,7 @@ export const renderTextEffectToContext = (
     const localTime = Math.max(0, time - clipStartTime);
     const progress = Math.min(1.0, localTime / Math.max(0.1, clipDuration));
 
-    const drawAnimatedText = (
-      originalFn: (text: string, x: number, y: number) => void,
-      txt: string,
-      x: number,
-      y: number
-    ) => {
+    const drawAnimatedText = (originalFn: (text: string, x: number, y: number) => void, txt: string, x: number, y: number) => {
       ctx.save();
 
       // Retrieve current text properties from context
@@ -81,7 +65,7 @@ export const renderTextEffectToContext = (
           }
         } else if (animation.type === "wave") {
           const waveSpeed = animation.speed ?? 1.0;
-          const waveAmp = animation.amplitude ?? (fontSize * 0.12);
+          const waveAmp = animation.amplitude ?? fontSize * 0.12;
           const waveFreq = animation.frequency ?? 5.0;
           const waveY = Math.sin(localTime * waveFreq * waveSpeed + i * 0.4) * waveAmp;
           charY = y + waveY;
@@ -97,7 +81,8 @@ export const renderTextEffectToContext = (
           const noise = Math.sin(glitchTimeTrigger * 12.9898) * 43758.5453;
           const randomVal = noise - Math.floor(noise);
 
-          if (randomVal < 0.15) { // 15% chance of glitch active at this instant
+          if (randomVal < 0.15) {
+            // 15% chance of glitch active at this instant
             // Apply slight skew/offset to some letters
             const letterHash = Math.sin(i * 7.13) * 1000;
             const letterRandom = letterHash - Math.floor(letterHash);
@@ -133,7 +118,7 @@ export const renderTextEffectToContext = (
   // the engines' vertical centering math (fontSize * 0.8 offset assumes "alphabetic").
   if (hasRegisteredEngine(effect?.id)) {
     renderRegisteredEffect(ctx, effect, text, fontSize, canvasWidth, canvasHeight, time, clipStartTime, clipDuration);
-    
+
     // Restore original functions
     ctx.fillText = originalFillText;
     ctx.strokeText = originalStrokeText;
@@ -143,75 +128,20 @@ export const renderTextEffectToContext = (
   // Apply baseline font config only for the fallback generic renderer
   applyFontConfig(ctx, effect.font || { family: "Arial", weight: "bold", style: "normal", letterSpacing: 0, lineHeight: 1.2 }, fontSize);
 
-  // ── Fallback generic renderer ────────────────────────────────────────────
-  // Reached only for effects that are not registered in the registry.
-  // Dynamic Bounding Box Word Wrapping: wraps sentences to prevent viewport bleeding!
-  const maxWidth = canvasWidth * 0.8;
-  const rawLines = text.split("\n");
-  const lines: string[] = [];
-  rawLines.forEach((rl) => {
-    lines.push(...wrapText(ctx, rl, maxWidth));
-  });
+  // ── @clypra/engine fallback renderer ─────────────────────────────────────
+  // All API-fetched effects that have no registered local engine are rendered
+  // here via the published @clypra/engine package. _buildConfig translates the
+  // structured TextEffectDefinition into the flat TextEffectConfig that
+  // renderTextEffectCore expects, so all fills, gradients, glows, strokes,
+  // bevels, and panels are handled correctly and consistently.
+  const engineConfig = {
+    ...engineDefaultConfig,
+    ..._buildConfig(effect, text, fontSize, canvasWidth, canvasHeight, time, clipStartTime, clipDuration),
+  };
 
-  const lineHeightPx = fontSize * (effect.font.lineHeight || 1.2);
-  const totalHeight = (lines.length - 1) * lineHeightPx;
-  const startY = _y - totalHeight / 2;
-
-  const fill = effect.fills?.[0];
-  const stroke = effect.strokes?.[0];
-  const shadow = effect.shadows?.[0];
-
-  ctx.save();
-
-  // Apply Drop Shadow
-  if (shadow) {
-    ctx.shadowColor = shadow.color || "rgba(0,0,0,0.5)";
-    ctx.shadowBlur = shadow.blur ?? 5;
-    ctx.shadowOffsetX = shadow.offsetX ?? 0;
-    ctx.shadowOffsetY = shadow.offsetY ?? 0;
-  }
-
-  // Set Fill Style
-  const hasFill = !fill || fill.type !== "none";
-  if (hasFill) {
-    if (fill && fill.type === "gradient") {
-      const stops = fill.gradient?.stops || [];
-      const grad = ctx.createLinearGradient(_x, startY - fontSize / 2, _x, startY + totalHeight + fontSize / 2);
-      stops.forEach((stop: any) => {
-        const offset = typeof stop.offset === "number" ? stop.offset : (stop.position ?? 0);
-        grad.addColorStop(offset, stop.color);
-      });
-      ctx.fillStyle = grad;
-    } else {
-      ctx.fillStyle = fill?.color || "#ffffff";
-    }
-  }
-
-  // Set Stroke Style
-  const hasStroke = !!stroke;
-  if (hasStroke) {
-    ctx.strokeStyle = stroke.color || "#000000";
-    ctx.lineWidth = stroke.width ?? 2;
-    ctx.lineJoin = stroke.lineJoin || "round";
-  }
-
-  // Draw lines
-  lines.forEach((line, i) => {
-    const currentY = startY + i * lineHeightPx;
-    if (hasFill) {
-      ctx.fillText(line, _x, currentY);
-    }
-    if (hasStroke) {
-      // Disable shadow for outline/stroke to keep it crisp
-      ctx.shadowColor = "transparent";
-      ctx.shadowBlur = 0;
-      ctx.shadowOffsetX = 0;
-      ctx.shadowOffsetY = 0;
-      ctx.strokeText(line, _x, currentY);
-    }
-  });
-
-  ctx.restore();
+  // OffscreenCanvasRenderingContext2D is not assignable to CanvasRenderingContext2D
+  // but renderTextEffectCore accepts both at runtime — cast is safe here.
+  renderTextEffectCore(ctx as CanvasRenderingContext2D, engineConfig);
 
   // Restore original functions
   ctx.fillText = originalFillText;
@@ -229,8 +159,6 @@ export const renderTextEffectToContext = (
 export const renderTextEffect = (canvas: HTMLCanvasElement, text: string, effect: TextEffectDefinition, fontSize: number) => {
   const ctx = canvas.getContext("2d");
   if (!ctx) return;
-
-  console.log("RENDER TEXT: ", effect);
 
   ctx.clearRect(0, 0, canvas.width, canvas.height);
   renderTextEffectToContext(ctx, text, effect, fontSize, canvas.width / 2, canvas.height / 2, canvas.width, canvas.height);
