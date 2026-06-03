@@ -66,7 +66,7 @@ export const TextSourcePreview: React.FC<TextSourcePreviewProps> = ({ preset }) 
     let aborted = false;
 
     const effectDef = effectDefinition;
-    const previewText = (preset as any)?.text || (preset as any)?.defaultText || preset?.name || "CLYPRA";
+    const previewText = (preset as any)?.text || (preset as any)?.defaultText || "CLYPRA";
     const fontSize = 80; // matches DEFAULT_FONT_SIZE — fills 800×200 correctly
 
     const durationSec = (effectDef.durationMs ?? 2000) / 1000;
@@ -142,7 +142,7 @@ export const TextSourcePreview: React.FC<TextSourcePreviewProps> = ({ preset }) 
   // Aspect ratio matches the canvas: 800×200 = 4:1
   return (
     <div className="w-full flex items-center justify-center relative overflow-hidden checkerboard" style={{ aspectRatio: `${PREVIEW_CANVAS_W} / ${PREVIEW_CANVAS_H}` }}>
-      <canvas ref={setCanvasRef} width={PREVIEW_CANVAS_W} height={PREVIEW_CANVAS_H} className="w-full h-full block select-none pointer-events-none" />
+      <canvas ref={setCanvasRef} className="w-full h-full block select-none pointer-events-none" />
     </div>
   );
 };

@@ -137,10 +137,13 @@ export async function rasterizeScene(scene: EvaluatedScene, target: RasterTarget
   const targetHeight = height * pixelRatio;
 
   // Create or reuse canvas
-  const isPooledCanvas = !canvas;
-  const outputCanvas = canvas || canvasPool.acquire(targetWidth, targetHeight);
+  // callerSupplied: canvas was provided by the caller (not drawn from pool)
+  const callerSupplied = canvas != null;
+  const outputCanvas = canvas ?? canvasPool.acquire(targetWidth, targetHeight);
 
-  if (!isPooledCanvas && (outputCanvas.width !== targetWidth || outputCanvas.height !== targetHeight)) {
+  // Resize caller-supplied canvases when dimensions changed.
+  // Pool canvases are always sized correctly by acquire().
+  if (callerSupplied && (outputCanvas.width !== targetWidth || outputCanvas.height !== targetHeight)) {
     outputCanvas.width = targetWidth;
     outputCanvas.height = targetHeight;
   }
@@ -154,9 +157,10 @@ export async function rasterizeScene(scene: EvaluatedScene, target: RasterTarget
     throw new Error("Failed to get 2D context");
   }
 
-  // Reset transform on every frame (critical when reusing pooled canvases).
-  // Without this, ctx.scale() accumulates across frames and can push all drawing off-screen.
-  if ("setTransform" in ctx) {
+  // Reset transform on every frame (critical when reusing pooled canvases —
+  // without this, ctx.scale() accumulates and pushes drawing off-screen).
+  // Guard for test environments where mock canvas contexts may not implement setTransform.
+  if (typeof ctx.setTransform === "function") {
     ctx.setTransform(1, 0, 0, 1, 0, 0);
   }
 
@@ -205,7 +209,7 @@ export async function rasterizeScene(scene: EvaluatedScene, target: RasterTarget
     scaleY: scale,
     rasterTimeMs,
     releaseCanvas: () => {
-      if (isPooledCanvas && outputCanvas instanceof OffscreenCanvas) {
+      if (!callerSupplied && outputCanvas instanceof OffscreenCanvas) {
         canvasPool.release(outputCanvas);
       }
     },
@@ -511,12 +515,14 @@ function rasterizeTextLayer(ctx: CanvasRenderingContext2D | OffscreenCanvasRende
       break;
   }
 
-  // Gradient fill (comma-separated colors = vertical multi-color gradient)
-  if (layer.color.includes(",")) {
-    const colors = layer.color.split(",");
+  // Gradient fill: only treat as multi-stop when the color contains " | " separator
+  // (explicit multi-stop format). Plain CSS colors including rgba(r,g,b,a) contain
+  // commas but are NOT gradient strings — the includes(",") check is insufficient.
+  const colorStops = layer.color.includes(" | ") ? layer.color.split(" | ") : null;
+  if (colorStops && colorStops.length >= 2) {
     const gradient = ctx.createLinearGradient(0, blockTopY, 0, blockTopY + totalHeight);
-    colors.forEach((color, idx) => {
-      gradient.addColorStop(idx / (colors.length - 1), color.trim());
+    colorStops.forEach((color, idx) => {
+      gradient.addColorStop(idx / (colorStops.length - 1), color.trim());
     });
     ctx.fillStyle = gradient;
   } else {

@@ -246,20 +246,30 @@ export class FontLoader {
 
   /**
    * Normalize font weight to numeric value.
+   * Handles numeric types, numeric strings (e.g. "600"), and CSS keyword strings.
    */
   private normalizeFontWeight(weight?: string | number): number {
     if (typeof weight === "number") {
       return weight;
     }
 
+    if (!weight) return 400;
+
+    // Parse numeric strings like "600", "800" directly
+    const asNum = parseInt(weight, 10);
+    if (!isNaN(asNum) && asNum >= 100 && asNum <= 900) {
+      return asNum;
+    }
+
     const weightMap: Record<string, number> = {
       normal: 400,
       bold: 700,
       lighter: 300,
+      // "bolder" is a relative CSS keyword — map to 700 as a reasonable fixed fallback
       bolder: 700,
     };
 
-    return weightMap[weight || "normal"] || 400;
+    return weightMap[weight] ?? 400;
   }
 }
 

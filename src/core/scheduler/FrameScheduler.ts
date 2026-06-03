@@ -236,6 +236,8 @@ export class FrameScheduler {
    */
   async wait(jobId: string): Promise<FrameResult> {
     return new Promise((resolve, reject) => {
+      let timerId: ReturnType<typeof setTimeout> | null = null;
+
       const checkJob = () => {
         const job = this.jobs.get(jobId);
         if (!job) {
@@ -246,12 +248,14 @@ export class FrameScheduler {
         if (job.status === "complete" && job.result) {
           resolve(job.result);
         } else if (job.status === "cancelled") {
+          if (timerId !== null) clearTimeout(timerId);
           reject(new Error("Job cancelled"));
         } else if (job.status === "failed") {
+          if (timerId !== null) clearTimeout(timerId);
           reject(job.error || new Error("Job failed"));
         } else {
           // Check again in 16ms (~60fps)
-          setTimeout(checkJob, 16);
+          timerId = setTimeout(checkJob, 16);
         }
       };
 
@@ -562,31 +566,31 @@ export class FrameScheduler {
           const key = `${layer.clipId}-${layer.mediaId}`;
           if (job.request.videoElements.has(key)) {
             const video = job.request.videoElements.get(key)!;
-            
+
             // If the video is currently seeking or hasn't loaded enough data yet, wait for it!
             if (video.seeking || video.readyState < 2) {
               const waitPromise = new Promise<void>((resolve) => {
                 let isResolved = false;
-                
+
                 const onReady = () => {
                   if (isResolved) return;
                   isResolved = true;
                   cleanup();
                   resolve();
                 };
-                
+
                 const cleanup = () => {
                   video.removeEventListener("seeked", onReady);
                   video.removeEventListener("canplay", onReady);
                   video.removeEventListener("error", onReady);
                   job.abortController.signal.removeEventListener("abort", onReady);
                 };
-                
+
                 video.addEventListener("seeked", onReady, { once: true });
                 video.addEventListener("canplay", onReady, { once: true });
                 video.addEventListener("error", onReady, { once: true });
                 job.abortController.signal.addEventListener("abort", onReady, { once: true });
-                
+
                 // Safety timeout: don't wait forever, let rasterizer handle fallback if it takes too long
                 setTimeout(onReady, 500);
               });
