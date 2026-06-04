@@ -52,6 +52,19 @@ export interface CreateTextClipOptions {
   background?: { color: string; padding: number; borderRadius: number };
 }
 
+function measureTextWidth(text: string, fontFamily: string, fontSize: number, bold: boolean): number {
+  try {
+    const canvas = typeof OffscreenCanvas !== "undefined" ? new OffscreenCanvas(1, 1) : document.createElement("canvas");
+    const ctx = canvas.getContext("2d") as any;
+    if (!ctx) return text.length * fontSize * 0.6; // Fallback estimate
+    ctx.font = `${bold ? "bold" : "normal"} ${fontSize}px ${fontFamily}`;
+    const metrics = ctx.measureText(text);
+    return metrics.width;
+  } catch (e) {
+    return text.length * fontSize * 0.6; // Fallback estimate
+  }
+}
+
 /**
  * Create a text clip with sensible defaults.
  */
@@ -79,8 +92,16 @@ export function createTextClip(options: CreateTextClipOptions): TextClip {
     background,
   } = options;
 
-  // Calculate position based on preset
-  const { x, y, width, height } = calculateTextPosition(position, canvasWidth, canvasHeight, fontSize);
+  // Measure the actual width of the text at the target fontSize to fit the bounding box
+  const isBold = bold || fontWeight === "bold" || (typeof fontWeight === "number" && fontWeight >= 700);
+  const measuredWidth = measureTextWidth(text, fontFamily, fontSize, isBold);
+
+  // Dynamic Bounding Box: measured width + padding, constrained by canvas width
+  const boxWidth = Math.min(canvasWidth * 0.95, Math.max(120, measuredWidth + fontSize * 0.8));
+  const boxHeight = fontSize * 1.5;
+
+  // Calculate position based on preset using the dynamic box sizes
+  const { x, y, width, height } = calculateTextPosition(position, canvasWidth, canvasHeight, boxWidth, boxHeight);
 
   return {
     id: generateId("text-clip"),
@@ -120,74 +141,78 @@ export function createTextClip(options: CreateTextClipOptions): TextClip {
 /**
  * Calculate text position based on preset.
  */
-function calculateTextPosition(position: "center" | "top" | "bottom" | "top-left" | "top-right" | "bottom-left" | "bottom-right", canvasWidth: number, canvasHeight: number, fontSize: number): { x: number; y: number; width: number; height: number } {
-  const textHeight = fontSize * 2; // Approximate height for text box
-  const textWidth = canvasWidth * 0.8; // 80% of canvas width
+function calculateTextPosition(
+  position: "center" | "top" | "bottom" | "top-left" | "top-right" | "bottom-left" | "bottom-right",
+  canvasWidth: number,
+  canvasHeight: number,
+  boxWidth: number,
+  boxHeight: number
+): { x: number; y: number; width: number; height: number } {
   const margin = 40; // Margin from edges
 
   switch (position) {
     case "center":
       return {
-        x: (canvasWidth - textWidth) / 2,
-        y: (canvasHeight - textHeight) / 2,
-        width: textWidth,
-        height: textHeight,
+        x: (canvasWidth - boxWidth) / 2,
+        y: (canvasHeight - boxHeight) / 2,
+        width: boxWidth,
+        height: boxHeight,
       };
 
     case "top":
       return {
-        x: (canvasWidth - textWidth) / 2,
+        x: (canvasWidth - boxWidth) / 2,
         y: margin,
-        width: textWidth,
-        height: textHeight,
+        width: boxWidth,
+        height: boxHeight,
       };
 
     case "bottom":
       return {
-        x: (canvasWidth - textWidth) / 2,
-        y: canvasHeight - textHeight - margin,
-        width: textWidth,
-        height: textHeight,
+        x: (canvasWidth - boxWidth) / 2,
+        y: canvasHeight - boxHeight - margin,
+        width: boxWidth,
+        height: boxHeight,
       };
 
     case "top-left":
       return {
         x: margin,
         y: margin,
-        width: textWidth / 2,
-        height: textHeight,
+        width: boxWidth,
+        height: boxHeight,
       };
 
     case "top-right":
       return {
-        x: canvasWidth - textWidth / 2 - margin,
+        x: canvasWidth - boxWidth - margin,
         y: margin,
-        width: textWidth / 2,
-        height: textHeight,
+        width: boxWidth,
+        height: boxHeight,
       };
 
     case "bottom-left":
       return {
         x: margin,
-        y: canvasHeight - textHeight - margin,
-        width: textWidth / 2,
-        height: textHeight,
+        y: canvasHeight - boxHeight - margin,
+        width: boxWidth,
+        height: boxHeight,
       };
 
     case "bottom-right":
       return {
-        x: canvasWidth - textWidth / 2 - margin,
-        y: canvasHeight - textHeight - margin,
-        width: textWidth / 2,
-        height: textHeight,
+        x: canvasWidth - boxWidth - margin,
+        y: canvasHeight - boxHeight - margin,
+        width: boxWidth,
+        height: boxHeight,
       };
 
     default:
       return {
-        x: (canvasWidth - textWidth) / 2,
-        y: (canvasHeight - textHeight) / 2,
-        width: textWidth,
-        height: textHeight,
+        x: (canvasWidth - boxWidth) / 2,
+        y: (canvasHeight - boxHeight) / 2,
+        width: boxWidth,
+        height: boxHeight,
       };
   }
 }
