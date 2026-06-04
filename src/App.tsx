@@ -6,7 +6,7 @@ import { TooltipProvider } from "@/components/ui/Tooltip";
 import { useProjectStore } from "@/store/projectStore";
 import { useUIStore } from "@/store/uiStore";
 import type { Project, AspectRatio } from "@/types";
-import { fromRustProject, type RustProject } from "@/types/serialization";
+import { fromRustProject, fromRustTrack, fromRustClip, type RustProject } from "@/types/serialization";
 import { SettingsModal } from "./components/ui/SettingsModal";
 
 const isExternalOrDataUrl = (value: string) => value.startsWith("data:") || value.startsWith("http") || value.startsWith("asset://");
@@ -116,8 +116,8 @@ const App = () => {
 
       // Prepare media assets, tracks and clips payload for atomic restore
       const mediaAssetsPayload = project.mediaAssets ?? [];
-      const tracksPayload = rustProject.tracks ?? [];
-      const clipsPayload = rustProject.clips ?? [];
+      const tracksPayload = rustProject.tracks?.map(fromRustTrack) ?? [];
+      const clipsPayload = rustProject.clips?.map(fromRustClip) ?? [];
 
       // Load project and atomically restore timeline and assets via projectStore.loadProject
       await loadProject(project, { mediaAssets: mediaAssetsPayload, tracks: tracksPayload, clips: clipsPayload });

@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/Button";
 import { normalizeFontFamily } from "@/core/evaluation/evaluator";
 import { allTextEffects } from "@/features/text-effects/registry";
 import type { TextEffectDefinition } from "@/features/text-effects/types/types";
-import { _buildConfig } from "@/features/text-effects/registry";
+import { _buildConfig } from "@clypra/engine";
 import type { TextClip } from "@/types";
 
 interface TextStyleSectionProps {
@@ -43,7 +43,7 @@ export const TextStyleSection: React.FC<TextStyleSectionProps> = ({ textClip, pr
     // Now you have the strict defaults defined by the studio! E.g.:
     console.log("Strict Default Fill Color:", effectDefaults.fillColor);
     console.log("Strict Default Bevel Depth:", effectDefaults.bevelDepth);
-    console.log("Strict Default Scanline Toggle:", effectDefaults.isGlitchEffect);
+    console.log("Strict Default Scanline Toggle:", (effectDefaults as any).isGlitchEffect);
   }
 
   return (

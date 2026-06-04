@@ -17,55 +17,9 @@
 
 import type { EvaluatedScene, EvaluatedMediaLayer, EvaluatedTextLayer } from "../evaluation/types";
 import { getResourceCache } from "../resources/ResourceCache";
-import { _buildConfig } from "../../features/text-effects/registry";
-import { defaultConfig as engineDefaultConfig, evaluateScene as engineEvaluateScene, textEffectConfigToScene, supportsCtxFilter, supportsOffscreenCanvas, type TextEffectConfig, WebGLCompositor } from "@clypra/engine";
+import { defaultConfig as engineDefaultConfig, evaluateScene as engineEvaluateScene, textEffectConfigToScene, type TextEffectConfig, _buildConfig, layerToTextEffectConfig, CanvasDevice } from "@clypra/engine";
 import { useEffectsStore } from "../../features/text-effects/store/effectsStore";
 
-// Shared WebGLCompositor for rasterizer — used when ctx.filter is unsupported (WKWebView).
-let _rasterizerCompositor: WebGLCompositor | null = null;
-function getRasterizerCompositor(): WebGLCompositor | null {
-  if (_rasterizerCompositor !== null) return _rasterizerCompositor;
-  if (typeof document === "undefined") return null;
-  _rasterizerCompositor = new WebGLCompositor();
-  return _rasterizerCompositor.isSupported ? _rasterizerCompositor : null;
-}
-
-/**
- * Global pool for OffscreenCanvas to prevent GC stalls during rendering/export.
- */
-class OffscreenCanvasPool {
-  private canvases: OffscreenCanvas[] = [];
-  private maxPoolSize = 5;
-
-  acquire(width: number, height: number): OffscreenCanvas {
-    let canvas: OffscreenCanvas;
-    if (this.canvases.length > 0) {
-      canvas = this.canvases.pop()!;
-      // Only resize if necessary
-      if (canvas.width !== width || canvas.height !== height) {
-        canvas.width = width;
-        canvas.height = height;
-      }
-    } else {
-      if (typeof OffscreenCanvas !== "undefined") {
-        canvas = new OffscreenCanvas(width, height);
-      } else {
-        canvas = document.createElement("canvas") as any as OffscreenCanvas;
-        canvas.width = width;
-        canvas.height = height;
-      }
-    }
-    return canvas;
-  }
-
-  release(canvas: OffscreenCanvas) {
-    if (this.canvases.length < this.maxPoolSize) {
-      this.canvases.push(canvas);
-    }
-  }
-}
-
-const canvasPool = new OffscreenCanvasPool();
 
 /**
  * Raster target configuration.
@@ -139,7 +93,7 @@ export async function rasterizeScene(scene: EvaluatedScene, target: RasterTarget
   // Create or reuse canvas
   // callerSupplied: canvas was provided by the caller (not drawn from pool)
   const callerSupplied = canvas != null;
-  const outputCanvas = canvas ?? canvasPool.acquire(targetWidth, targetHeight);
+  const outputCanvas = canvas ?? CanvasDevice.acquire(targetWidth, targetHeight);
 
   // Resize caller-supplied canvases when dimensions changed.
   // Pool canvases are always sized correctly by acquire().
@@ -209,8 +163,8 @@ export async function rasterizeScene(scene: EvaluatedScene, target: RasterTarget
     scaleY: scale,
     rasterTimeMs,
     releaseCanvas: () => {
-      if (!callerSupplied && outputCanvas instanceof OffscreenCanvas) {
-        canvasPool.release(outputCanvas);
+      if (!callerSupplied) {
+        CanvasDevice.release(outputCanvas);
       }
     },
   };
@@ -377,13 +331,17 @@ function drawLoadingPlaceholder(ctx: CanvasRenderingContext2D | OffscreenCanvasR
  * respects the same baseline alignment as the engine (fontSize * 0.82).
  */
 function rasterizeTextLayer(ctx: CanvasRenderingContext2D | OffscreenCanvasRenderingContext2D, layer: EvaluatedTextLayer, width: number, height: number, scaleX: number, scaleY: number): void {
-  // ── Styled text: full engine pipeline ────────────────────────────────────
+  // fontSize for rendering: scaled to match the layer's on-canvas pixel size.
+  const fontSize = layer.fontSize * scaleY;
+  const effectPadding = fontSize * 0.5;
+  const offW = Math.max(1, Math.ceil(width + effectPadding * 2));
+  const offH = Math.max(1, Math.ceil(height + effectPadding * 2));
+
+  let engineConfig: TextEffectConfig;
+
   if (layer.styleId) {
     const effectDef = useEffectsStore.getState().definitions[layer.styleId];
     if (effectDef) {
-      // fontSize for rendering: scaled to match the layer's on-canvas pixel size.
-      const fontSize = layer.fontSize * scaleY;
-
       // fontSize for _buildConfig ratio: use the AUTHORED fontSize (layer.fontSize,
       // unscaled). _buildConfig computes ratio = fontSize / 100 to proportionally
       // scale blur, spread, stroke widths, etc. relative to the studio's 100px
@@ -393,13 +351,8 @@ function rasterizeTextLayer(ctx: CanvasRenderingContext2D | OffscreenCanvasRende
       // studio. The canvas dimensions (offW/offH) already encode the correct render
       // size; the engine centers text within them independently of this ratio.
       const authoredFontSize = layer.fontSize;
-
-      const effectPadding = fontSize * 0.5;
-      const offW = Math.max(1, Math.ceil(width + effectPadding * 2));
-      const offH = Math.max(1, Math.ceil(height + effectPadding * 2));
-
       const builtCfg = _buildConfig(effectDef, layer.text, authoredFontSize, offW, offH, layer.time, layer.clipStartTime, layer.clipDuration);
-      const engineConfig: TextEffectConfig = {
+      engineConfig = {
         ...engineDefaultConfig,
         ...builtCfg,
         // _buildConfig writes width/height (local engine keys).
@@ -412,255 +365,48 @@ function rasterizeTextLayer(ctx: CanvasRenderingContext2D | OffscreenCanvasRende
         fontSize,
         fontFamily: layer.fontFamily || effectDef.font?.family,
       } as TextEffectConfig;
-
-      const sceneDoc = textEffectConfigToScene(engineConfig);
-
-      if (!supportsCtxFilter()) {
-        // WKWebView: ctx.filter is a no-op. Render to offscreen then composite
-        // via WebGLCompositor which applies blur/bloom as WebGL post-fx.
-        const compositor = getRasterizerCompositor();
-        const offscreen = canvasPool.acquire(offW, offH);
-        const offCtx = offscreen.getContext("2d", { alpha: true }) as OffscreenCanvasRenderingContext2D | null;
-        if (offCtx) {
-          offCtx.setTransform(1, 0, 0, 1, 0, 0);
-          offCtx.clearRect(0, 0, offW, offH);
-          engineEvaluateScene(sceneDoc, layer.time ?? 0, offCtx as unknown as CanvasRenderingContext2D, { skipPostFx: true });
-
-          if (compositor) {
-            // WebGL handles blur/bloom pass then blits back to a temp canvas we draw from
-            const blitCanvas = document.createElement("canvas");
-            blitCanvas.width = offW;
-            blitCanvas.height = offH;
-            const blitCtx = blitCanvas.getContext("2d")!;
-            compositor.renderToContext(blitCtx, offscreen, { blur: 0, bloom: 0, bloomThreshold: 0.6 });
-            ctx.drawImage(blitCanvas, 0, 0, offW, offH, -width / 2 - effectPadding, -height / 2 - effectPadding, offW, offH);
-            blitCanvas.width = 0; // release backing store
-          } else {
-            // No WebGL — flat blit, no blur/bloom
-            ctx.drawImage(offscreen, 0, 0, offW, offH, -width / 2 - effectPadding, -height / 2 - effectPadding, offW, offH);
-          }
-        }
-        canvasPool.release(offscreen);
-        return;
-      }
-
-      // ctx.filter supported — evaluate directly onto an offscreen buffer then blit
-      const offscreen = canvasPool.acquire(offW, offH);
-      const offCtx = offscreen.getContext("2d", { alpha: true }) as OffscreenCanvasRenderingContext2D | null;
-      if (offCtx) {
-        offCtx.setTransform(1, 0, 0, 1, 0, 0);
-        offCtx.clearRect(0, 0, offW, offH);
-        engineEvaluateScene(sceneDoc, layer.time ?? 0, offCtx as unknown as CanvasRenderingContext2D);
-        ctx.drawImage(offscreen, 0, 0, offW, offH, -width / 2 - effectPadding, -height / 2 - effectPadding, offW, offH);
-      }
-      canvasPool.release(offscreen);
-      return;
+    } else {
+      // styleId present but definition not yet in cache — silent miss, will redraw
+      // once prefetchEffect resolves. Fallback to plain text to show something.
+      const plainConfig = layerToTextEffectConfig(layer);
+      engineConfig = {
+        ...plainConfig,
+        canvasWidth: offW,
+        canvasHeight: offH,
+        fontSize,
+        fontFamily: layer.fontFamily,
+      } as any;
     }
-    // styleId present but definition not yet in cache — silent miss, will redraw
-    // once prefetchEffect resolves. Fallthrough to plain text to show something.
-  }
-
-  // ── Plain text: minimal Canvas 2D path ───────────────────────────────────
-  // Baseline alignment matches the engine: textBaseline = "alphabetic",
-  // startY offset = fontSize * 0.82, which is the engine's convention in
-  // textLayout.ts::layoutWithFontSize.
-  const fontWeight = typeof layer.fontWeight === "number" ? layer.fontWeight : layer.fontWeight === "bold" ? "700" : "400";
-  const fontStyle = layer.fontStyle === "italic" ? "italic" : "normal";
-  const fontSize = layer.fontSize * scaleY;
-  const fontFamily = layer.fontFamily;
-
-  ctx.font = `${fontStyle} ${fontWeight} ${fontSize}px ${fontFamily}`;
-  ctx.textBaseline = "alphabetic";
-
-  if (layer.letterSpacing !== 0) {
-    (ctx as any).letterSpacing = `${layer.letterSpacing * scaleX}px`;
-  }
-
-  const lines = wrapText(ctx, layer.text, width, fontSize, layer.lineHeight);
-  const lineHeight = fontSize * layer.lineHeight;
-  // Total block height: first line baseline to last line baseline + descender allowance
-  const totalHeight = (lines.length - 1) * lineHeight + fontSize;
-
-  // Vertical alignment using alphabetic baseline (engine convention: startY = top_of_block + fontSize * 0.82)
-  // 0.82 approximates the cap-height-to-size ratio, matching textLayout.ts::layoutWithFontSize
-  let blockTopY: number;
-  switch (layer.verticalAlign) {
-    case "top":
-      blockTopY = -height / 2;
-      break;
-    case "bottom":
-      blockTopY = height / 2 - totalHeight;
-      break;
-    case "middle":
-    default:
-      blockTopY = -totalHeight / 2;
-      break;
-  }
-  const firstBaselineY = blockTopY + fontSize * 0.82;
-
-  ctx.textAlign = layer.textAlign;
-  // textBaseline stays "alphabetic" as set above
-
-  let textX: number;
-  switch (layer.textAlign) {
-    case "left":
-      textX = -width / 2;
-      break;
-    case "right":
-      textX = width / 2;
-      break;
-    case "center":
-    default:
-      textX = 0;
-      break;
-  }
-
-  // Gradient fill: only treat as multi-stop when the color contains " | " separator
-  // (explicit multi-stop format). Plain CSS colors including rgba(r,g,b,a) contain
-  // commas but are NOT gradient strings — the includes(",") check is insufficient.
-  const colorStops = layer.color.includes(" | ") ? layer.color.split(" | ") : null;
-  if (colorStops && colorStops.length >= 2) {
-    const gradient = ctx.createLinearGradient(0, blockTopY, 0, blockTopY + totalHeight);
-    colorStops.forEach((color, idx) => {
-      gradient.addColorStop(idx / (colorStops.length - 1), color.trim());
-    });
-    ctx.fillStyle = gradient;
   } else {
-    ctx.fillStyle = layer.color;
+    // Plain text: build configuration from evaluated layer properties
+    const plainConfig = layerToTextEffectConfig(layer);
+    engineConfig = {
+      ...plainConfig,
+      canvasWidth: offW,
+      canvasHeight: offH,
+      fontSize,
+      fontFamily: layer.fontFamily,
+    } as any;
   }
 
-  ctx.save();
-  ctx.beginPath();
-  ctx.rect(-width / 2, -height / 2, width, height);
-  ctx.clip();
+  const sceneDoc = textEffectConfigToScene(engineConfig);
 
-  // Draw background box if specified
-  if (layer.background) {
-    const bgPadding = (layer.background.padding ?? 12) * scaleX;
-    const bgRadius = (layer.background.borderRadius ?? 6) * scaleX;
-    const maxLineWidth = Math.max(...lines.map((line) => ctx.measureText(line).width), 10);
-    const bgWidth = maxLineWidth + bgPadding * 2;
-    const bgHeight = totalHeight + bgPadding * 2;
-
-    let bgX: number;
-    switch (layer.textAlign) {
-      case "left":
-        bgX = -width / 2 - bgPadding;
-        break;
-      case "right":
-        bgX = width / 2 - maxLineWidth - bgPadding;
-        break;
-      case "center":
-      default:
-        bgX = -maxLineWidth / 2 - bgPadding;
-        break;
+  // Acquire canvas context from the unified CanvasDevice pool
+  const offscreen = CanvasDevice.acquire(offW, offH);
+  const offCtx = offscreen.getContext("2d", { alpha: true }) as OffscreenCanvasRenderingContext2D | null;
+  if (offCtx) {
+    if (typeof offCtx.setTransform === "function") {
+      offCtx.setTransform(1, 0, 0, 1, 0, 0);
     }
-
-    const bgY = blockTopY - bgPadding;
-
-    ctx.save();
-    ctx.fillStyle = layer.background.color;
-    ctx.beginPath();
-    // Use manual rounded rect drawing for universal compatibility (OffscreenCanvas in older webviews)
-    ctx.moveTo(bgX + bgRadius, bgY);
-    ctx.lineTo(bgX + bgWidth - bgRadius, bgY);
-    ctx.quadraticCurveTo(bgX + bgWidth, bgY, bgX + bgWidth, bgY + bgRadius);
-    ctx.lineTo(bgX + bgWidth, bgY + bgHeight - bgRadius);
-    ctx.quadraticCurveTo(bgX + bgWidth, bgY + bgHeight, bgX + bgWidth - bgRadius, bgY + bgHeight);
-    ctx.lineTo(bgX + bgRadius, bgY + bgHeight);
-    ctx.quadraticCurveTo(bgX, bgY + bgHeight, bgX, bgY + bgHeight - bgRadius);
-    ctx.lineTo(bgX, bgY + bgRadius);
-    ctx.quadraticCurveTo(bgX, bgY, bgX + bgRadius, bgY);
-    ctx.closePath();
-    ctx.fill();
-    ctx.restore();
+    offCtx.clearRect(0, 0, offW, offH);
+    engineEvaluateScene(sceneDoc, layer.time ?? 0, offCtx as unknown as CanvasRenderingContext2D);
+    ctx.drawImage(offscreen, 0, 0, offW, offH, -width / 2 - effectPadding, -height / 2 - effectPadding, offW, offH);
   }
-
-  // Draw each line
-  for (let i = 0; i < lines.length; i++) {
-    const line = lines[i];
-    const y = firstBaselineY + i * lineHeight;
-
-    // Draw text shadow if specified
-    if (layer.shadow) {
-      ctx.save();
-      ctx.shadowColor = layer.shadow.color;
-      ctx.shadowBlur = layer.shadow.blur * scaleY;
-      ctx.shadowOffsetX = layer.shadow.offsetX * scaleX;
-      ctx.shadowOffsetY = layer.shadow.offsetY * scaleY;
-      ctx.fillText(line, textX, y);
-      ctx.restore();
-    }
-
-    // Draw text stroke if specified
-    if (layer.stroke) {
-      ctx.strokeStyle = layer.stroke.color;
-      ctx.lineWidth = layer.stroke.width * scaleY;
-      ctx.strokeText(line, textX, y);
-    }
-
-    // Draw text fill
-    ctx.fillText(line, textX, y);
-  }
-
-  ctx.restore();
-
-  // Reset letter spacing
-  if (layer.letterSpacing !== 0) {
-    (ctx as any).letterSpacing = "0px";
-  }
+  CanvasDevice.release(offscreen);
 }
 
-/**
- * Wrap text to fit within a maximum width.
- * Handles manual line breaks (\n) and automatic word wrapping.
- */
-function wrapText(ctx: CanvasRenderingContext2D | OffscreenCanvasRenderingContext2D, text: string, maxWidth: number, fontSize: number, lineHeight: number): string[] {
-  const lines: string[] = [];
+// wrapText helper was removed since wrapping is handled natively inside the engine.
 
-  // Split by manual line breaks first
-  const paragraphs = text.split("\n");
-
-  for (const paragraph of paragraphs) {
-    if (paragraph.trim() === "") {
-      lines.push("");
-      continue;
-    }
-
-    // Measure paragraph width
-    const metrics = ctx.measureText(paragraph);
-
-    // If paragraph fits, add it as-is
-    if (metrics.width <= maxWidth) {
-      lines.push(paragraph);
-      continue;
-    }
-
-    // Wrap paragraph into multiple lines
-    const words = paragraph.split(" ");
-    let currentLine = "";
-
-    for (const word of words) {
-      const testLine = currentLine ? `${currentLine} ${word}` : word;
-      const testMetrics = ctx.measureText(testLine);
-
-      if (testMetrics.width > maxWidth && currentLine) {
-        // Line is too long, push current line and start new one
-        lines.push(currentLine);
-        currentLine = word;
-      } else {
-        currentLine = testLine;
-      }
-    }
-
-    // Push remaining text
-    if (currentLine) {
-      lines.push(currentLine);
-    }
-  }
-
-  return lines;
-}
 
 /**
  * Map blend mode to canvas composite operation.

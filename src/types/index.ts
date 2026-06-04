@@ -159,7 +159,7 @@ export interface TextClip extends Clip {
     padding: number;
     borderRadius: number;
   };
-  // Inherited from Clip: x, y, width, height, rotation, opacity
+  styleDefinition?: import("@clypra/engine").TextEffectDefinition;
 }
 
 export type DragItem = { type: "MEDIA_ASSET"; asset: MediaAsset } | { type: "CLIP"; clip: Clip };

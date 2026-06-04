@@ -188,7 +188,7 @@ export const SourcePreview: React.FC = () => {
         trackId: targetTrackId,
         startTime,
         duration: 3.0, // standard 3s duration for text clips added from preview
-        text: preset.text || preset.name || "Text",
+        text: preset.text || "CLYPRA",
         canvasWidth: project?.canvasWidth || 1920,
         canvasHeight: project?.canvasHeight || 1080,
         fontFamily: preset.fontFamily,

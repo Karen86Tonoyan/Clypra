@@ -1,70 +1,14 @@
-import { evaluateScene as engineEvaluateScene, textEffectConfigToScene, defaultConfig as engineDefaultConfig, supportsCtxFilter, supportsOffscreenCanvas, WebGLCompositor, type TextEffectConfig } from "@clypra/engine";
+import { evaluateScene as engineEvaluateScene, textEffectConfigToScene, defaultConfig as engineDefaultConfig, type TextEffectConfig, _buildConfig } from "@clypra/engine";
 import { TextEffectDefinition } from "./types/types";
-import { hasRegisteredEngine, renderRegisteredEffect, _buildConfig } from "./registry";
+import { hasRegisteredEngine, renderRegisteredEffect } from "./registry";
 import { getFontLoader } from "@/core/fonts/FontLoader";
-
-// ─── Shared WebGLCompositor ───────────────────────────────────────────────────
-// Platform capability detection (supportsCtxFilter) is now provided by
-// @clypra/engine/platform.ts — the single canonical implementation.
-// This module no longer maintains its own detection state.
-
-let _compositor: WebGLCompositor | null = null;
-
-function getCompositor(): WebGLCompositor | null {
-  if (_compositor !== null) return _compositor;
-  if (typeof document === "undefined") return null;
-  _compositor = new WebGLCompositor();
-  return _compositor.isSupported ? _compositor : null;
-}
 
 /**
  * Draw a SceneDocument to the target canvas context.
- *
- * Routes through WebGLCompositor when ctx.filter is unsupported (WKWebView on
- * macOS Tauri). On standard browsers and Windows WebView2, evaluates directly
- * onto the target context with no intermediate allocation.
+ * Delegates directly to the engine's evaluateScene.
  */
 function drawScene(targetCtx: CanvasRenderingContext2D, cfg: TextEffectConfig, time: number): void {
   const scene = getOrBuildScene(cfg);
-  const w = cfg.canvasWidth as number;
-  const h = cfg.canvasHeight as number;
-
-  if (!supportsCtxFilter()) {
-    // WKWebView: ctx.filter is a no-op. Render to an intermediate canvas then
-    // composite via WebGLCompositor which applies blur/bloom as WebGL post-fx.
-    const compositor = getCompositor();
-
-    let off: HTMLCanvasElement | OffscreenCanvas;
-    if (supportsOffscreenCanvas()) {
-      off = new OffscreenCanvas(w, h);
-    } else {
-      off = document.createElement("canvas");
-      off.width = w;
-      off.height = h;
-    }
-
-    const offCtx = off.getContext("2d") as CanvasRenderingContext2D | OffscreenCanvasRenderingContext2D;
-    offCtx.clearRect(0, 0, w, h);
-    engineEvaluateScene(scene, time, offCtx as unknown as CanvasRenderingContext2D);
-
-    if (compositor) {
-      compositor.renderToContext(targetCtx, off, { blur: 0, bloom: 0, bloomThreshold: 0.6 });
-    } else {
-      // WebGL also unavailable — flat blit, no blur/bloom post-fx
-      targetCtx.clearRect(0, 0, w, h);
-      targetCtx.drawImage(off as CanvasImageSource, 0, 0);
-    }
-
-    // Release DOM canvas backing store if OffscreenCanvas was unavailable
-    if (!(off instanceof OffscreenCanvas)) {
-      (off as HTMLCanvasElement).width = 0;
-      (off as HTMLCanvasElement).height = 0;
-    }
-    return;
-  }
-
-  // ctx.filter supported — evaluate directly onto the target context
-  targetCtx.clearRect(0, 0, w, h);
   engineEvaluateScene(scene, time, targetCtx);
 }
 

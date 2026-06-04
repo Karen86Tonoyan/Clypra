@@ -91,6 +91,7 @@ export interface RustClip {
   rotation: number;
   aspectRatioLocked?: boolean;
   sourceAspectRatio?: number;
+  style_definition?: any;
 }
 
 // ============================================================================
@@ -189,7 +190,12 @@ export function fromRustClip(rust: RustClip): Clip {
 
   // Preserve all additional properties (e.g., TextClip properties)
   // This ensures text, fontFamily, fontSize, color, etc. are restored
-  return { ...baseClip, ...rust } as Clip;
+  const clip = { ...baseClip, ...rust } as any;
+  if (rust.style_definition) {
+    clip.styleDefinition = rust.style_definition;
+    delete clip.style_definition;
+  }
+  return clip as Clip;
 }
 
 // ============================================================================
@@ -294,5 +300,11 @@ export function toRustClip(frontend: Clip): RustClip {
 
   // Preserve all additional properties (e.g., TextClip properties)
   // Rust stores clips as Vec<serde_json::Value>, so it can handle any extra fields
-  return { ...baseClip, ...frontend } as RustClip;
+  const rust = { ...baseClip, ...frontend } as any;
+  const fAny = frontend as any;
+  if (fAny.styleDefinition) {
+    rust.style_definition = fAny.styleDefinition;
+    delete rust.styleDefinition;
+  }
+  return rust as RustClip;
 }
