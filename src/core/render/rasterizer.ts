@@ -366,8 +366,36 @@ function rasterizeTextLayer(ctx: CanvasRenderingContext2D | OffscreenCanvasRende
         fontFamily: layer.fontFamily || effectDef.font?.family,
       } as TextEffectConfig;
     } else {
-      // styleId present but definition not yet in cache — silent miss, will redraw
-      // once prefetchEffect resolves. Fallback to plain text to show something.
+      // styleId present but definition not yet in cache — trigger fetch in background
+      // and fall back to plain text until it resolves and redraws.
+      const store = useEffectsStore.getState();
+      if (!store.prefetchingIds.has(layer.styleId)) {
+        // Mark as prefetching to prevent duplicate network requests
+        useEffectsStore.setState((s) => {
+          const next = new Set(s.prefetchingIds);
+          next.add(layer.styleId!);
+          return { prefetchingIds: next };
+        });
+
+        store.fetchDefinitionOnlyById(layer.styleId)
+          .then(() => {
+            // Once resolved, remove from prefetchingIds (definitions cache is now populated)
+            useEffectsStore.setState((s) => {
+              const next = new Set(s.prefetchingIds);
+              next.delete(layer.styleId!);
+              return { prefetchingIds: next };
+            });
+          })
+          .catch((err) => {
+            useEffectsStore.setState((s) => {
+              const next = new Set(s.prefetchingIds);
+              next.delete(layer.styleId!);
+              return { prefetchingIds: next };
+            });
+            console.error(`[Rasterizer] Failed to load text effect ${layer.styleId}:`, err);
+          });
+      }
+
       const plainConfig = layerToTextEffectConfig(layer);
       engineConfig = {
         ...plainConfig,

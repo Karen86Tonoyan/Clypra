@@ -1,6 +1,5 @@
 import React from "react";
-
-import { convertFileSrc } from "@tauri-apps/api/core";
+import { platform } from "@/core/platform";
 
 // @ts-ignore - react-dnd types issue
 import { useDrag } from "react-dnd";
@@ -48,9 +47,9 @@ export const MediaCard: React.FC<MediaCardProps> = ({ asset, isSelected, isUsedI
         {asset.type === "video" && asset.posterFrame && !/\.(mp4|mov|avi|mkv|webm|flv)(%|$)/i.test(asset.posterFrame) ? (
           <img src={asset.posterFrame} alt={asset.name} className="w-full h-full object-contain" />
         ) : asset.type === "audio" ? (
-          <MediaCardWaveform audioPath={asset.path.startsWith("asset://") ? asset.path : convertFileSrc(asset.path)} duration={asset.duration} className="w-full h-full" />
+          <MediaCardWaveform audioPath={asset.path.startsWith("asset://") ? asset.path : platform.convertFileSrc(asset.path)} duration={asset.duration} className="w-full h-full" />
         ) : asset.type === "image" ? (
-          <img src={asset.path.startsWith("asset://") ? asset.path : convertFileSrc(asset.path)} alt={asset.name} className="w-full h-full object-contain" />
+          <img src={asset.path.startsWith("asset://") ? asset.path : platform.convertFileSrc(asset.path)} alt={asset.name} className="w-full h-full object-contain" />
         ) : (
           <div className="w-8 h-8">
             <Film className="w-full h-full text-text-muted" />

@@ -93,7 +93,7 @@ export const PropertiesPanel: React.FC = () => {
   };
 
   return (
-    <div className="w-92 min-h-0 panel-shell flex flex-col overflow-hidden shrink-0">
+    <div className="w-full md:w-92 min-h-0 panel-shell flex flex-col overflow-hidden shrink-0">
       {/* Header Panel Tabs */}
       <div className="panel-head flex items-center justify-between border-b border-border select-none">
         {isTextClip ? (

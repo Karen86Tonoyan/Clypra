@@ -7,6 +7,7 @@ import { useSettingsStore } from "@/store/settingsStore";
 import type { AspectRatio, MediaAsset, Project } from "@/types";
 import { MAX_PROJECT_NAME_LENGTH } from "@/types";
 import { useUIStore } from "@/store/uiStore";
+import { platform } from "@/core/platform";
 
 interface LaunchScreenProps {
   onProjectCreate: (name: string, aspectRatio: AspectRatio, frameRate: 24 | 30 | 60) => void;
@@ -47,34 +48,7 @@ export const LaunchScreen: React.FC<LaunchScreenProps> = ({ onProjectCreate, onP
   useEffect(() => {
     const loadRecentProjects = async () => {
       try {
-        const { convertFileSrc, invoke } = await import("@tauri-apps/api/core");
-        const projectsJson: string[] = await invoke("get_recent_projects");
-
-        // Convert snake_case from Rust to camelCase for frontend
-        const projects = projectsJson.map((json) => {
-          const rustProject = JSON.parse(json);
-          const mediaAssets: MediaAsset[] = Array.isArray(rustProject.media_assets)
-            ? rustProject.media_assets.map((asset: MediaAsset) => ({
-                ...asset,
-                posterFrame: asset.posterFrame && !isExternalOrDataUrl(asset.posterFrame) ? convertFileSrc(asset.posterFrame) : asset.posterFrame,
-                coverArt: asset.coverArt && !isExternalOrDataUrl(asset.coverArt) ? convertFileSrc(asset.coverArt) : asset.coverArt,
-                path: asset.path && asset.type === "image" && !isExternalOrDataUrl(asset.path) ? convertFileSrc(asset.path) : asset.path,
-              }))
-            : [];
-          return {
-            id: rustProject.id,
-            name: rustProject.name,
-            createdAt: rustProject.created_at,
-            updatedAt: rustProject.modified_at || rustProject.created_at,
-            aspectRatio: rustProject.aspect_ratio,
-            canvasWidth: rustProject.canvas_width,
-            canvasHeight: rustProject.canvas_height,
-            frameRate: rustProject.frame_rate,
-            duration: rustProject.duration || 0,
-            mediaAssets,
-          };
-        });
-
+        const projects = await platform.getRecentProjects();
         setRecentProjects(projects);
       } catch (error) {
         console.error("Failed to load recent projects:", error);

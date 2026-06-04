@@ -1,78 +1,43 @@
 import React, { useState, lazy, Suspense } from "react";
-import { Film, Upload, Home, Settings, Camera } from "lucide-react";
+import { Film, Upload, Home, Settings } from "lucide-react";
 import { Button } from "../ui/Button";
-import { usePlayback } from "@/hooks/usePlayback";
 import { useProjectStore } from "@/store/projectStore";
 import { useUIStore } from "@/store/uiStore";
-import { useTimelineStore } from "@/store/timelineStore";
 import { useHistoryStore } from "@/store/historyStore";
-import { exportFrameAndDownload } from "@/lib/exportFrame";
 import { useTauriFullscreen } from "@/hooks/useTauriFullscreen";
+import { platform } from "@/core/platform";
 
-// Lazy load ExportDialog (code splitting)
+// Lazy load ExportDialog
 const ExportDialog = lazy(() => import("../ui/ExportDialog").then((m) => ({ default: m.ExportDialog })));
 
 export const TopBar: React.FC = () => {
-  const { currentTime, duration, formatTime } = usePlayback();
-  const { project, closeProject, mediaAssets } = useProjectStore();
+  const { project, closeProject } = useProjectStore();
   const { toggleSettingsModal } = useUIStore();
-  const { clips, tracks, epoch } = useTimelineStore();
   const { state: historyState } = useHistoryStore();
-  const [isExportingFrame, setIsExportingFrame] = useState(false);
   const [showExportDialog, setShowExportDialog] = useState(false);
 
   const { isFullscreen } = useTauriFullscreen();
 
-  const handleExportFrame = async () => {
-    if (!project) return;
-
-    setIsExportingFrame(true);
-    try {
-      await exportFrameAndDownload({
-        time: currentTime,
-        clips,
-        tracks,
-        assets: mediaAssets,
-        project,
-        epoch,
-        format: "png",
-      });
-    } catch (error) {
-      console.error("Failed to export frame:", error);
-      alert("Failed to export frame. Check console for details.");
-    } finally {
-      setIsExportingFrame(false);
-    }
-  };
-
   return (
     <>
       {/* Native title bar area - content positioned in the title bar */}
-      <div className="h-[37px] flex items-center justify-between gap-3 bg-transparent" data-tauri-drag-region style={{ WebkitAppRegion: "drag" } as React.CSSProperties}>
+      <div className="h-[30px] flex items-center justify-between gap-3" data-tauri-drag-region style={{ WebkitAppRegion: "drag" } as React.CSSProperties}>
         {/* Left side - starts after traffic lights */}
-        <div className={`flex items-center gap-3 ${isFullscreen ? "" : "pl-16"}`} data-tauri-drag-region>
+        <div className={`flex items-center gap-2 ${platform.type === "tauri" && !isFullscreen ? "pl-[70px]" : ""}`} data-tauri-drag-region>
           <Button variant="ghost" size="icon-sm" onClick={closeProject} title="Back to Home" style={{ WebkitAppRegion: "no-drag", cursor: "pointer" } as React.CSSProperties}>
             <Home className="w-4 h-4" />
           </Button>
-          <div className="w-px h-5 bg-border/50" />
-          <Film className="w-4 h-4 text-accent-soft" />
-          <span className="text-xs font-semibold text-text-primary truncate max-w-[200px]" title={project?.name}>
-            {project?.name}
-          </span>
         </div>
 
-        {/* Center - timecode */}
-        <div className="flex items-center gap-2 text-xs text-text-primary bg-surface-raised/50 border border-border/50 px-2.5 py-0.5 rounded-md backdrop-blur-sm" data-tauri-drag-region>
-          <span>{formatTime(currentTime)}</span>
-          <span className="text-text-muted">/</span>
-          <span>{formatTime(duration)}</span>
-        </div>
+        <span className="text-xs font-semibold text-text-primary truncate max-w-[80px] sm:max-w-[200px] text-center" title={project?.name}>
+          {project?.name}
+        </span>
 
         {/* Right side - actions */}
         <div className="flex items-center gap-1.5">
           {/* Undo/Redo indicator */}
           {(historyState.canUndo || historyState.canRedo) && (
-            <div className="flex items-center gap-1 text-[10px] text-text-muted mr-1">
+            <div className="hidden sm:flex items-center gap-1 text-[10px] text-text-muted mr-1">
               <span title={`${historyState.position + 1} undo actions available`}>{historyState.position + 1} undo</span>
               {historyState.canRedo && (
                 <>
@@ -83,9 +48,6 @@ export const TopBar: React.FC = () => {
             </div>
           )}
 
-          <Button variant="ghost" size="icon-sm" onClick={handleExportFrame} disabled={isExportingFrame} title="Export Current Frame (PNG)" style={{ WebkitAppRegion: "no-drag", cursor: "pointer" } as React.CSSProperties}>
-            <Camera className="w-3.5 h-3.5" />
-          </Button>
           <Button variant="ghost" size="icon-sm" onClick={toggleSettingsModal} title="Settings" style={{ WebkitAppRegion: "no-drag", cursor: "pointer" } as React.CSSProperties}>
             <Settings className="w-3.5 h-3.5" />
           </Button>

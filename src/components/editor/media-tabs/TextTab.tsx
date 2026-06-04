@@ -486,7 +486,7 @@ export const TextTab: React.FC<TabProps> = ({ onAddToTimeline }) => {
                 {favoriteTemplatesList.length === 0 ? (
                   <p className="text-xs text-text-muted/60 italic py-2 pl-1">No favorite templates saved.</p>
                 ) : (
-                  <div className="grid grid-cols-2 gap-2 p-1.5">
+                  <div className="grid grid-cols-3 gap-1.5">
                     {favoriteTemplatesList.map((template) => (
                       <TemplateCard key={template.id} template={template} isFavorite={true} isDownloading={downloadingIds.includes(template.id)} isDownloaded={downloadedTemplates.includes(template.id)} onFavorite={(e) => handleToggleFavorite(template.id, e)} onApply={(e) => handleDownloadAndApply(template, "template", e)} onPreview={() => handlePreview(template, "template")} />
                     ))}
@@ -496,7 +496,7 @@ export const TextTab: React.FC<TabProps> = ({ onAddToTimeline }) => {
             )}
 
             {/* Effects Display Grid */}
-            {activeTab === "effects" && <NewEffectGrid searchQuery={searchQuery} />}
+            {activeTab === "effects" && <NewEffectGrid searchQuery={searchQuery} onAddToTimeline={onAddToTimeline} />}
 
             {/* Templates Display Grid */}
             {activeTab === "templates" && (
@@ -521,7 +521,7 @@ export const TextTab: React.FC<TabProps> = ({ onAddToTimeline }) => {
                     <p className="opacity-60">Try searching other categories</p>
                   </div>
                 ) : (
-                  <div className="grid grid-cols-2 gap-2 p-1.5">
+                  <div className="grid grid-cols-3 gap-1.5">
                     {filteredTemplates.map((template) => (
                       <TemplateCard key={template.id} template={template} isFavorite={favorites.includes(template.id)} isDownloading={downloadingIds.includes(template.id)} isDownloaded={downloadedTemplates.includes(template.id)} onFavorite={(e) => handleToggleFavorite(template.id, e)} onApply={(e) => handleDownloadAndApply(template, "template", e)} onPreview={() => handlePreview(template, "template")} />
                     ))}

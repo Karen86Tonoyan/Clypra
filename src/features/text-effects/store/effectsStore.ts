@@ -1,6 +1,7 @@
 // src/features/text-effects/store/effectsStore.ts
 import { create } from "zustand";
 import type { EffectIndexItem, EffectFullDefinition } from "../types/types";
+import { ClypraApi } from "../api/clypraApi";
 
 const API_BASE = "https://clypra-worker-api.abdulkabirmusa.com";
 const API_KEY = import.meta.env.VITE_CLYPRA_API_KEY || "";
@@ -41,6 +42,7 @@ interface EffectsState {
   selectEffect: (id: string, category: string) => Promise<void>;
   prefetchEffect: (id: string, category: string) => void; // fire and forget
   clearSelected: () => void;
+  fetchDefinitionOnlyById: (id: string) => Promise<EffectFullDefinition>;
 }
 
 export const useEffectsStore = create<EffectsState>((set, get) => ({
@@ -177,4 +179,15 @@ export const useEffectsStore = create<EffectsState>((set, get) => ({
   },
 
   clearSelected: () => set({ selectedEffect: null, selectedCategory: null }),
+  fetchDefinitionOnlyById: async (id) => {
+    const cached = get().definitions[id];
+    if (cached) return cached;
+
+    const index = await ClypraApi.getEffectsIndex();
+    const item = index.find((x) => x.id === id);
+    if (!item) throw new Error(`Effect with ID ${id} not found in index`);
+
+    const def = await get().getDefinitionById(id, item.category);
+    return def;
+  },
 }));

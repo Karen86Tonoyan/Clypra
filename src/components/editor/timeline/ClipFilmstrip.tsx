@@ -14,7 +14,7 @@
  */
 
 import { useEffect, useRef, useMemo } from "react";
-import { convertFileSrc } from "@tauri-apps/api/core";
+import { platform } from "@/core/platform";
 import { cn } from "@/lib/utils";
 import { createRasterSurface, type AnyRasterSurface } from "@/lib/renderEngine/webglRasterSurface";
 import { useFilmstrip } from "@/lib/useFilmstrip";
@@ -34,7 +34,7 @@ function resolveMediaSrc(path: string): string {
   if (path.startsWith("data:") || path.startsWith("asset://") || path.startsWith("http://") || path.startsWith("https://")) {
     return path;
   }
-  return convertFileSrc(path);
+  return platform.convertFileSrc(path);
 }
 
 export interface ClipFilmstripProps {

@@ -52,7 +52,7 @@ export const ExportPresetCard: React.FC<ExportPresetCardProps> = ({ config, sele
       disabled={disabled}
       aria-pressed={selected}
       className={`
-        group relative w-full text-left rounded-xl p-3 transition-all duration-200 outline-none
+        group relative w-full md:w-full min-w-[150px] shrink-0 text-left rounded-xl p-3 transition-all duration-200 outline-none
         ${disabled ? "opacity-40 cursor-not-allowed" : "cursor-pointer"}
         ${selected ? "bg-accent/10 border border-accent/40 ring-1 ring-accent/20" : "bg-white/2 border border-white/6 hover:bg-white/4 hover:border-white/10"}
       `}

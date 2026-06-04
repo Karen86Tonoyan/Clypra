@@ -1,5 +1,4 @@
 import { useEffect, useState, useCallback } from "react";
-import { getCurrentWindow } from "@tauri-apps/api/window";
 
 interface UseTauriFullscreenReturn {
   /** Current fullscreen state (native macOS/Windows fullscreen) */
@@ -10,9 +9,15 @@ interface UseTauriFullscreenReturn {
   exitFullscreen: () => Promise<void>;
   /** Toggle fullscreen mode */
   toggleFullscreen: () => Promise<void>;
-  /** Whether the API is available (always true in Tauri) */
+  /** Whether the API is available (only true in Tauri) */
   isSupported: boolean;
 }
+
+// True if running inside a Tauri container, or during unit testing
+const isTauriEnv = typeof window !== "undefined" && (
+  !!(window as any).__TAURI_INTERNALS__ || 
+  import.meta.env.MODE === "test"
+);
 
 /**
  * Hook to detect and control native fullscreen state in Tauri apps
@@ -22,10 +27,13 @@ interface UseTauriFullscreenReturn {
  */
 export function useTauriFullscreen(): UseTauriFullscreenReturn {
   const [isFullscreen, setIsFullscreen] = useState(false);
+  const isSupported = isTauriEnv;
 
   // Check current fullscreen state
   const checkFullscreen = useCallback(async (): Promise<boolean> => {
+    if (!isTauriEnv) return false;
     try {
+      const { getCurrentWindow } = await import("@tauri-apps/api/window");
       const window = getCurrentWindow();
       const fullscreen = await window.isFullscreen();
       return fullscreen;
@@ -37,7 +45,9 @@ export function useTauriFullscreen(): UseTauriFullscreenReturn {
 
   // Enter fullscreen
   const enterFullscreen = useCallback(async (): Promise<void> => {
+    if (!isTauriEnv) return;
     try {
+      const { getCurrentWindow } = await import("@tauri-apps/api/window");
       const window = getCurrentWindow();
       await window.setFullscreen(true);
       setIsFullscreen(true);
@@ -49,7 +59,9 @@ export function useTauriFullscreen(): UseTauriFullscreenReturn {
 
   // Exit fullscreen
   const exitFullscreen = useCallback(async (): Promise<void> => {
+    if (!isTauriEnv) return;
     try {
+      const { getCurrentWindow } = await import("@tauri-apps/api/window");
       const window = getCurrentWindow();
       await window.setFullscreen(false);
       setIsFullscreen(false);
@@ -61,6 +73,7 @@ export function useTauriFullscreen(): UseTauriFullscreenReturn {
 
   // Toggle fullscreen
   const toggleFullscreen = useCallback(async (): Promise<void> => {
+    if (!isTauriEnv) return;
     const currentState = await checkFullscreen();
     if (currentState) {
       await exitFullscreen();
@@ -69,8 +82,10 @@ export function useTauriFullscreen(): UseTauriFullscreenReturn {
     }
   }, [checkFullscreen, enterFullscreen, exitFullscreen]);
 
-  // Poll for fullscreen state changes (since Tauri doesn't emit events for this)
+  // Poll for fullscreen state changes (only in Tauri environment)
   useEffect(() => {
+    if (!isTauriEnv) return;
+
     let mounted = true;
     let pollInterval: number;
 
@@ -105,6 +120,6 @@ export function useTauriFullscreen(): UseTauriFullscreenReturn {
     enterFullscreen,
     exitFullscreen,
     toggleFullscreen,
-    isSupported: true, // Always supported in Tauri
+    isSupported,
   };
 }

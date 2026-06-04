@@ -7,4 +7,5 @@ export interface TabProps {
 
 export interface MediaTabProps {
   onAddToTimeline?: (item: any, type: TabType) => void;
+  initialTab?: TabType;
 }

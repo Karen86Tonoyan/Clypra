@@ -333,7 +333,7 @@ function AppearanceTab() {
       {/* Font Family */}
       <section>
         <h3 className="text-[11px] font-semibold uppercase tracking-wider text-text-muted mb-3">Font</h3>
-        <div className="grid grid-cols-3 gap-2">
+        <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
           {fontKeys.map((f) => {
             const meta = FONT_META[f];
             const isSel = fontFamily === f;
@@ -528,9 +528,9 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose })
 
   return (
     <Modal isOpen={isOpen} onClose={onClose} title="Settings" size="lg">
-      <div className="flex min-h-[420px]">
+      <div className="flex flex-col md:flex-row min-h-[420px]">
         {/* Sidebar */}
-        <div className="w-[160px] shrink-0 border-r border-white/6 p-2 flex flex-col gap-0.5">
+        <div className="w-full md:w-[160px] shrink-0 border-b md:border-b-0 md:border-r border-white/6 p-2 flex flex-row md:flex-col gap-1 overflow-x-auto scrollbar-none">
           {TABS.map((tab) => {
             const Icon = tab.icon;
             const isActive = activeTab === tab.id;

@@ -1,5 +1,5 @@
 import React, { useRef, useEffect, useState } from "react";
-import { convertFileSrc } from "@tauri-apps/api/core";
+import { platform } from "@/core/platform";
 import { drawRoundedRect, getThemeAccentRgb } from "@/lib/canvasUtils";
 
 interface TimelineWaveformProps {
@@ -35,7 +35,7 @@ export const TimelineWaveform: React.FC<TimelineWaveformProps> = ({ audioPath, c
 
   // Decode audio and generate waveform data
   useEffect(() => {
-    const resolvedPath = audioPath.startsWith("asset://") ? audioPath : convertFileSrc(audioPath);
+    const resolvedPath = audioPath.startsWith("asset://") ? audioPath : platform.convertFileSrc(audioPath);
 
     // Create cache key that includes sample count for zoom-responsive caching
     const cacheKey = `${resolvedPath}:${sampleCount}`;

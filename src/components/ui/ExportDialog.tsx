@@ -378,17 +378,17 @@ export const ExportDialog: React.FC<ExportDialogProps> = ({ isOpen, onClose }) =
 
   return (
     <Modal isOpen={isOpen} onClose={phase === "exporting" ? () => {} : onClose} title="Export Video" size="lg">
-      <div className="flex min-h-[400px]">
+      <div className="flex flex-col md:flex-row min-h-[400px]">
         {/* ─── Left Sidebar: Preset Cards ─────────────────────────── */}
-        <div className="w-[200px] shrink-0 border-r border-white/6 p-3 flex flex-col gap-2">
-          <div className="text-[10px] font-semibold uppercase tracking-wider text-text-muted mb-1 px-0.5">Export Preset</div>
+        <div className="w-full md:w-[200px] shrink-0 border-b md:border-b-0 md:border-r border-white/6 p-3 flex flex-row md:flex-col gap-2 overflow-x-auto scrollbar-none items-center md:items-stretch">
+          <div className="text-[10px] font-semibold uppercase tracking-wider text-text-muted px-0.5 hidden md:block">Export Preset</div>
 
           {PRESET_ORDER.map((key) => (
             <ExportPresetCard key={key} presetKey={key} config={PRESET_CONFIGS[key]} selected={preset === key} disabled={phase === "exporting"} onSelect={() => setPreset(key)} />
           ))}
 
           {/* FFmpeg status — bottom of sidebar */}
-          <div className="mt-auto pt-3 border-t border-white/6">
+          <div className="hidden md:block mt-auto pt-3 border-t border-white/6">
             {ffmpegAvailable === null && (
               <div className="flex items-center gap-2 px-1">
                 <div className="w-2 h-2 rounded-full bg-text-muted/30 animate-pulse" />

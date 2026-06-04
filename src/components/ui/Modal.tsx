@@ -27,11 +27,11 @@ export const Modal: React.FC<ModalProps> = ({ isOpen, onClose, title, children, 
   const maxW = size === "lg" ? "max-w-[680px]" : "max-w-xl";
 
   return (
-    <div className="fixed inset-0 z-10000 flex items-center justify-center">
+    <div className="fixed inset-0 z-10000 flex items-center justify-center p-2 sm:p-4">
       {/* Backdrop */}
       <div className="fixed inset-0 bg-black/70 backdrop-blur-[2px] animate-in fade-in duration-150" onClick={onClose} />
       {/* Dialog */}
-      <div className={`relative ${maxW} w-[90vw] max-h-[85vh] overflow-hidden rounded-xl border border-white/6 bg-surface shadow-2xl animate-in zoom-in-95 fade-in duration-150`} style={{ boxShadow: "0 0 0 1px rgba(255,255,255,0.04), 0 24px 64px rgba(0,0,0,0.55)" }}>
+      <div className={`relative ${maxW} w-[94vw] md:w-[90vw] max-h-[92vh] md:max-h-[85vh] overflow-hidden rounded-xl border border-white/6 bg-surface shadow-2xl animate-in zoom-in-95 fade-in duration-150`} style={{ boxShadow: "0 0 0 1px rgba(255,255,255,0.04), 0 24px 64px rgba(0,0,0,0.55)" }}>
         {/* Header */}
         <div className="flex items-center justify-between px-5 h-12 border-b border-white/6">
           <h2 className="text-[15px] font-semibold text-text-primary tracking-tight">{title}</h2>
@@ -40,7 +40,7 @@ export const Modal: React.FC<ModalProps> = ({ isOpen, onClose, title, children, 
           </button>
         </div>
         {/* Body */}
-        <div className="overflow-y-auto" style={{ maxHeight: "calc(85vh - 48px - (var(--footer-h, 0px)))" }}>
+        <div className="overflow-y-auto max-h-[calc(92vh-48px-var(--footer-h,0px))] md:max-h-[calc(85vh-48px-var(--footer-h,0px))]">
           {children}
         </div>
         {/* Footer */}

@@ -304,7 +304,7 @@ input[type="range"]:focus-visible {
   --sidebar-border: #2e2e2e;
   --sidebar-ring: #6c63ff;
   --layout-gap: 0.5rem;
-  --layout-radius: 0.75rem;
+  --layout-radius: 0.35rem;
   --elev-shadow: 0 8px 24px rgba(0, 0, 0, 0.22);
 }
 

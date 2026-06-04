@@ -198,7 +198,7 @@ export const Timeline: React.FC = () => {
   };
 
   return (
-    <div className="h-80 flex flex-col select-none bg-[#141920] relative">
+    <div className="h-60 md:h-80 flex flex-col select-none bg-[#141920] relative">
       <TimelineToolbar />
 
       <div className="flex-1 flex overflow-hidden">

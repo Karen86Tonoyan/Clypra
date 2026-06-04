@@ -3,8 +3,12 @@ import { Music, Smile, Wand2, Shuffle, MessageSquare } from "lucide-react";
 import { MediaTab, AudioTab, TextTab, StickersTab, EffectsTab, TransitionsTab, CaptionsTab, type TabType, MediaTabProps } from "../media-tabs";
 import { TextIcon, YouTubeIcon } from "../../ui/icons";
 
-export const EnhancedMediaPanel: React.FC<MediaTabProps> = ({ onAddToTimeline }) => {
-  const [activeTab, setActiveTab] = useState<TabType>("media");
+export const EnhancedMediaPanel: React.FC<MediaTabProps> = ({ onAddToTimeline, initialTab = "media" }) => {
+  const [activeTab, setActiveTab] = useState<TabType>(initialTab);
+
+  React.useEffect(() => {
+    setActiveTab(initialTab);
+  }, [initialTab]);
 
   const tabs = [
     { id: "media" as const, icon: YouTubeIcon, label: "Media" },
@@ -17,7 +21,7 @@ export const EnhancedMediaPanel: React.FC<MediaTabProps> = ({ onAddToTimeline })
   ];
 
   return (
-    <div className="w-92 min-h-0 panel-shell flex flex-col overflow-hidden shrink-0">
+    <div className="w-full md:w-92 min-h-0 panel-shell flex flex-col overflow-hidden shrink-0">
       {/* Tab Navigation */}
       <div className="panel-head border-b border-border">
         <div
