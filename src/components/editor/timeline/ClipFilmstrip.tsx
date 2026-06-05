@@ -94,14 +94,17 @@ export function ClipFilmstrip({ clip, mediaAsset, clipWidthPx, pixelsPerSecond, 
   // ── Draw filmstrip whenever artifacts or layout changes ───────────────────
   useEffect(() => {
     const surface = surfaceRef.current;
+    console.log(`[ClipFilmstrip DEBUG] useEffect draw clip=${clip.id} artifactsCount=${artifacts.length} isFallback=${isFallback} surfaceFound=${!!surface}`);
     if (!surface) return;
 
     const dpr = window.devicePixelRatio || 1;
     const layout = { clipWidthPx, stripHeightPx, dpr, tileWidthPx };
 
     if (artifacts.length > 0) {
+      console.log(`[ClipFilmstrip DEBUG] drawing filmstrip with ${artifacts.length} artifacts`);
       surface.drawFilmstrip(artifacts, layout);
     } else {
+      console.log(`[ClipFilmstrip DEBUG] drawing placeholder/empty`);
       surface.drawPlaceholder(layout);
     }
   }, [artifacts, clipWidthPx, stripHeightPx, tileWidthPx]);
