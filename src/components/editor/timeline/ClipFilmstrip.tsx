@@ -98,7 +98,14 @@ export function ClipFilmstrip({ clip, mediaAsset, clipWidthPx, pixelsPerSecond, 
     if (!surface) return;
 
     const dpr = window.devicePixelRatio || 1;
-    const layout = { clipWidthPx, stripHeightPx, dpr, tileWidthPx };
+    const layout = {
+      clipWidthPx,
+      stripHeightPx,
+      dpr,
+      tileWidthPx,
+      trimIn: clip.trimIn,
+      trimOut: clip.trimOut,
+    };
 
     if (artifacts.length > 0) {
       console.log(`[ClipFilmstrip DEBUG] drawing filmstrip with ${artifacts.length} artifacts`);
