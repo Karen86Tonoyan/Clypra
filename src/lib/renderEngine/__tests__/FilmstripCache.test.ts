@@ -562,10 +562,10 @@ describe("FilmstripCache Aggressive Cheating", () => {
     expect(art10.bitmap.close).not.toHaveBeenCalled();
     expect(art15.bitmap.close).not.toHaveBeenCalled();
 
-    // Non-matching tiles: 20s, 25s, 30s (disposed)
-    expect(art20.bitmap.close).toHaveBeenCalled();
-    expect(art25.bitmap.close).toHaveBeenCalled();
-    expect(art30.bitmap.close).toHaveBeenCalled();
+    // Non-matching tiles: 20s, 25s, 30s are kept in global tileCache, so they are not closed
+    expect(art20.bitmap.close).not.toHaveBeenCalled();
+    expect(art25.bitmap.close).not.toHaveBeenCalled();
+    expect(art30.bitmap.close).not.toHaveBeenCalled();
 
     // Verify cache entry contains kept artifacts immediately
     const artifacts = cache.getArtifacts("clip-1");
