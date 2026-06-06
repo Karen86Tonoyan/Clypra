@@ -2,9 +2,21 @@
 import { create } from "zustand";
 import type { EffectIndexItem, EffectFullDefinition } from "../types/types";
 import { ClypraApi } from "../api/clypraApi";
+import { builtInPresets } from "@clypra/engine";
+import type { TextEffectConfig } from "@clypra/engine";
 
 const API_BASE = "https://clypra-worker-api.abdulkabirmusa.com";
 const API_KEY = import.meta.env.VITE_CLYPRA_API_KEY || "";
+
+type BoundingBoxSpec = {
+  paddingX: number;
+  paddingY: number;
+  mode?: "ink" | "panel";
+};
+
+type EffectDefinitionWithBounds = EffectFullDefinition & {
+  boundingBox?: BoundingBoxSpec;
+};
 
 // Helper function to create headers with API key
 const getHeaders = (): HeadersInit => {
@@ -21,6 +33,202 @@ const getHeaders = (): HeadersInit => {
   return headers;
 };
 
+function convertConfigToDefinition(preset: any): EffectDefinitionWithBounds {
+  const cfg = preset.config;
+  
+  // Font
+  const font = {
+    family: cfg.fontFamily || "Poppins",
+    weight: cfg.fontWeight || 700,
+    style: (cfg.fontStyle || "normal") as "normal" | "italic",
+    letterSpacing: cfg.letterSpacing || 0,
+    lineHeight: cfg.lineHeight || 1.2,
+  };
+
+  // Fills
+  const fills = [];
+  if (cfg.fillType !== "none") {
+    fills.push({
+      type: cfg.fillType || "solid",
+      color: cfg.fillColor || "#FFFFFF",
+      gradient: cfg.fillGradientStops ? {
+        angle: cfg.fillGradientAngle ?? 90,
+        stops: cfg.fillGradientStops,
+      } : undefined,
+      patternType: cfg.patternType,
+      perCharFillEnabled: cfg.perCharFillEnabled,
+      charFillColors: cfg.charFillColors,
+    });
+  }
+
+  // Strokes
+  const strokes = [];
+  if (cfg.strokeEnabled) {
+    strokes.push({
+      color: cfg.strokeColor || "#000000",
+      width: cfg.strokeWidth || 0,
+      position: cfg.strokePosition || "outside",
+      opacity: cfg.strokeOpacity || 100,
+      lineJoin: cfg.strokeLineJoin || "round",
+      blur: cfg.strokeBlur || 0,
+      type: cfg.strokeType || "single",
+      colorSecondary: cfg.strokeColorSecondary,
+      widthSecondary: cfg.strokeWidthSecondary,
+      fadeRange: cfg.strokeFadeRange,
+    });
+  }
+
+  // Shadows
+  const shadows = [];
+  if (cfg.shadowEnabled) {
+    shadows.push({
+      color: cfg.shadowColor || "#000000",
+      blur: cfg.shadowBlur || 0,
+      offsetX: cfg.shadowOffsetX || 0,
+      offsetY: cfg.shadowOffsetY || 0,
+      opacity: cfg.shadowOpacity || 80,
+      type: cfg.shadowType || "drop",
+    });
+  }
+
+  // Bevel
+  let bevel = undefined;
+  if (cfg.bevelEnabled) {
+    bevel = {
+      depth: cfg.bevelDepth || 5,
+      highlightColor: cfg.bevelHighlight || "#FFFFFF",
+      shadowColor: cfg.bevelShadow || "#000000",
+      direction: cfg.bevelDirection || "bottom-right",
+      coreColor: cfg.bevelCoreColor || "#000000",
+      edgeColor: cfg.bevelEdgeColor || "#2A2A38",
+      edgeWidth: cfg.bevelEdgeWidth || 0,
+      blur: cfg.bevelBlur || 0,
+      blurColor: cfg.bevelBlurColor || "#000000",
+      perspectiveEnabled: cfg.bevelPerspectiveEnabled || false,
+      vanishingPointX: cfg.bevelVanishingPointX || 40,
+      vanishingPointY: cfg.bevelVanishingPointY || 80,
+      focalLength: cfg.bevelFocalLength || 400,
+    };
+  }
+
+  // Glows
+  let glows = undefined;
+  if (cfg.glowLayers) {
+    glows = cfg.glowLayers.filter((g: any) => g.enabled).map((g: any) => ({
+      color: g.color,
+      blur: g.blur,
+      opacity: g.opacity,
+      type: g.type,
+      strength: g.strength,
+      spread: g.spread,
+    }));
+  }
+
+  // Panel
+  let panel = undefined;
+  if (cfg.panelEnabled) {
+    panel = {
+      color: cfg.panelColor || "#1E1E26",
+      opacity: cfg.panelOpacity || 80,
+      radius: cfg.panelRadius || 12,
+      paddingX: cfg.panelPaddingX || 40,
+      paddingY: cfg.panelPaddingY || 20,
+      stroke: cfg.panelStrokeEnabled ? {
+        color: cfg.panelStrokeColor || "#2A2A38",
+        width: cfg.panelStrokeWidth || 2,
+      } : undefined,
+    };
+  }
+
+  // Stack
+  let stack = undefined;
+  if (cfg.stackEnabled) {
+    stack = {
+      count: cfg.stackCount || 3,
+      offsetX: cfg.stackOffsetX || 10,
+      offsetY: cfg.stackOffsetY || -10,
+      opacityDecay: cfg.stackOpacityDecay || 20,
+      color1: cfg.stackColor1,
+      color2: cfg.stackColor2,
+      color3: cfg.stackColor3,
+      color4: cfg.stackColor4,
+    };
+  }
+
+  return {
+    id: preset.id,
+    name: preset.name,
+    category: preset.category,
+    description: "",
+    tags: [],
+    boundingBox: calculateBoundingBox(cfg),
+    font,
+    fills,
+    strokes,
+    shadows,
+    bevel,
+    glows,
+    panel,
+    stack,
+  };
+}
+
+function calculateBoundingBox(cfg: TextEffectConfig): BoundingBoxSpec {
+  if (cfg.panelEnabled) {
+    const strokeWidth = cfg.panelStrokeEnabled ? cfg.panelStrokeWidth || 0 : 0;
+    return {
+      mode: "panel",
+      paddingX: (cfg.panelPaddingX || 0) + strokeWidth,
+      paddingY: (cfg.panelPaddingY || 0) + strokeWidth,
+    };
+  }
+
+  let paddingX = 0;
+  let paddingY = 0;
+
+  if (cfg.strokeEnabled) {
+    paddingX = Math.max(paddingX, cfg.strokeWidth || 0);
+    paddingY = Math.max(paddingY, cfg.strokeWidth || 0);
+    paddingX += cfg.strokeBlur || 0;
+    paddingY += cfg.strokeBlur || 0;
+  }
+
+  if (cfg.shadowEnabled) {
+    paddingX = Math.max(paddingX, Math.abs(cfg.shadowOffsetX || 0) + (cfg.shadowBlur || 0));
+    paddingY = Math.max(paddingY, Math.abs(cfg.shadowOffsetY || 0) + (cfg.shadowBlur || 0));
+  }
+
+  cfg.glowLayers?.forEach((glow) => {
+    if (!glow.enabled) return;
+    const glowPadding = (glow.blur || 0) + (glow.spread || 0);
+    paddingX = Math.max(paddingX, glowPadding);
+    paddingY = Math.max(paddingY, glowPadding);
+  });
+
+  if (cfg.bevelEnabled) {
+    paddingX = Math.max(paddingX, cfg.bevelDepth || 0);
+    paddingY = Math.max(paddingY, cfg.bevelDepth || 0);
+    paddingX += cfg.bevelBlur || 0;
+    paddingY += cfg.bevelBlur || 0;
+  }
+
+  if (cfg.stackEnabled) {
+    paddingX = Math.max(paddingX, Math.abs((cfg.stackOffsetX || 0) * (cfg.stackCount || 1)));
+    paddingY = Math.max(paddingY, Math.abs((cfg.stackOffsetY || 0) * (cfg.stackCount || 1)));
+  }
+
+  return {
+    mode: "ink",
+    paddingX: Math.max(10, Math.ceil(paddingX * 1.15)),
+    paddingY: Math.max(10, Math.ceil(paddingY * 1.15)),
+  };
+}
+
+const initialDefinitions = builtInPresets.reduce<Record<string, EffectDefinitionWithBounds>>((acc, preset) => {
+  acc[preset.id] = convertConfigToDefinition(preset);
+  return acc;
+}, {});
+
 interface EffectsState {
   // ── Phase 1: Grid index ─────────────────────────────────────────
   index: Record<string, EffectIndexItem[]>; // category → items
@@ -28,7 +236,7 @@ interface EffectsState {
   indexError: string | null;
 
   // ── Phase 2: Full definitions ───────────────────────────────────
-  definitions: Record<string, EffectFullDefinition>; // id → definition
+  definitions: Record<string, EffectDefinitionWithBounds>; // id → definition
   loadingId: string | null; // which card shows a spinner
   prefetchingIds: Set<string>; // silent background fetches
 
@@ -49,7 +257,7 @@ export const useEffectsStore = create<EffectsState>((set, get) => ({
   index: {},
   indexLoading: false,
   indexError: null,
-  definitions: {},
+  definitions: initialDefinitions,
   loadingId: null,
   prefetchingIds: new Set(),
   selectedEffect: null,
@@ -98,6 +306,15 @@ export const useEffectsStore = create<EffectsState>((set, get) => ({
   getDefinitionById: async (id, category) => {
     const cached = get().definitions[id];
     if (cached) return cached;
+
+    const localPreset = builtInPresets.find((p) => p.id === id);
+    if (localPreset) {
+      const def = convertConfigToDefinition(localPreset);
+      set((state) => ({
+        definitions: { ...state.definitions, [id]: def },
+      }));
+      return def;
+    }
 
     const catKey = category.toLowerCase();
     const res = await fetch(`${API_BASE}/effects/${catKey}/${id}`, {
@@ -183,11 +400,57 @@ export const useEffectsStore = create<EffectsState>((set, get) => ({
     const cached = get().definitions[id];
     if (cached) return cached;
 
-    const index = await ClypraApi.getEffectsIndex();
-    const item = index.find((x) => x.id === id);
-    if (!item) throw new Error(`Effect with ID ${id} not found in index`);
+    const localPreset = builtInPresets.find((p) => p.id === id);
+    if (localPreset) {
+      const def = convertConfigToDefinition(localPreset);
+      set((state) => ({
+        definitions: { ...state.definitions, [id]: def },
+      }));
+      return def;
+    }
 
-    const def = await get().getDefinitionById(id, item.category);
-    return def;
+    // 1. Try finding in currently loaded category indexes in store state
+    const localIndexItem = Object.values(get().index)
+      .flat()
+      .find((x) => x.id === id);
+    if (localIndexItem) {
+      const def = await get().getDefinitionById(id, localIndexItem.category);
+      return def;
+    }
+
+    // 2. Try finding in the global index
+    let globalIndexItem = null;
+    try {
+      const globalIndex = await ClypraApi.getEffectsIndex();
+      globalIndexItem = globalIndex.find((x) => x.id === id);
+    } catch (e) {
+      console.warn("[EffectsStore] Failed to load global effects index:", e);
+    }
+
+    if (globalIndexItem) {
+      const def = await get().getDefinitionById(id, globalIndexItem.category);
+      return def;
+    }
+
+    // 3. Fallback: Scan known categories sequentially to locate the effect's category
+    const ALL_CATEGORIES = ["3d", "neon", "metallic", "glitch", "retro", "gradient", "grunge", "outline", "shadow", "elements", "luxury"];
+    for (const cat of ALL_CATEGORIES) {
+      try {
+        const categoryManifest = await ClypraApi.getEffectsByCategory(cat);
+        const found = categoryManifest.find((x) => x.id === id);
+        if (found) {
+          // Cache the category index so subsequent searches and UI renderers benefit
+          set((state) => ({
+            index: { ...state.index, [cat]: categoryManifest },
+          }));
+          const def = await get().getDefinitionById(id, cat);
+          return def;
+        }
+      } catch (err) {
+        // Continue scanning other categories
+      }
+    }
+
+    throw new Error(`Effect with ID ${id} not found in index or any category manifest`);
   },
 }));

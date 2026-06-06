@@ -4,52 +4,5 @@
  * Satisfies TextEffectDefinition interface structure
  */
 
-export interface EffectIndexItem {
-  id:           string;
-  name:         string;
-  category:     string;
-  description?: string;
-  tags?:        string[];
-  isPremium?:   boolean;
-
-  // Preview format
-  previewType?: 'static' | 'video' | 'lottie';
-  thumbnailUrl?: string;      // always present from API manifests
-  thumbnail?:    string;      // legacy/static data compatibility
-  previewUrl?:  string;       // WebM (video) or JSON (lottie) — animated only
-  durationMs?:  number;       // loop length hint for progress ring, templates only
-}
-
-export interface EffectFullDefinition extends EffectIndexItem {
-  version?:     string;
-  description:  string;
-  tags:         string[];
-  font: {
-    family: string;
-    weight: number;
-    style: "normal" | "italic";
-    letterSpacing: number;
-    lineHeight: number;
-  };
-  fills: any[];
-  strokes: any[];
-  shadows: any[];
-  bevel?: any;
-  glow?: any;
-  glows?: any[];
-  panel?: any;
-  glitch?: any;
-  animation?: {
-    type: "none" | "typewriter" | "wave" | "fade" | "glitch";
-    speed?: number;
-    amplitude?: number;
-    frequency?: number;
-  };
-  background?: any;
-}
-
-export interface TextEffectDefinition extends EffectFullDefinition {
-  text?: string;
-  description: string;
-  tags: string[];
-}
+// Re-export types from @clypra/engine for consistency across the codebase
+export type { EffectIndexItem, EffectFullDefinition, TextEffectDefinition } from "@clypra/engine";
