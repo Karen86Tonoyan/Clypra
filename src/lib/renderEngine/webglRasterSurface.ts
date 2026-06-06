@@ -23,33 +23,14 @@ import type { TransportArtifact } from "./transport";
 const VERT_SRC = /* glsl */ `#version 300 es
 precision mediump float;
 
-// Per-vertex payload repeats per tile: position rect [x, y, w, h] in clip-space
-// and UV rect [u, v, uw, uh] in atlas space.
-in vec4 a_posRect;   // x, y, w, h  (clip-space, -1..1)
-in vec4 a_uvRect;    // u, v, uw, uh (0..1 in atlas)
+in vec2 a_pos;
+in vec2 a_uv;
 
 out vec2 v_uv;
 
 void main() {
-  // Expand rect into 2 triangles via vertex index (0-5 per tile)
-  int vi = gl_VertexID % 6;
-  // Quad corners: 0=TL, 1=TR, 2=BL, 3=TR, 4=BR, 5=BL
-  float dx[6];  float dy[6];
-  dx[0]=0.0; dy[0]=0.0;
-  dx[1]=1.0; dy[1]=0.0;
-  dx[2]=0.0; dy[2]=1.0;
-  dx[3]=1.0; dy[3]=0.0;
-  dx[4]=1.0; dy[4]=1.0;
-  dx[5]=0.0; dy[5]=1.0;
-
-  float cx = a_posRect.x + a_posRect.z * dx[vi];
-  float cy = a_posRect.y - a_posRect.w * dy[vi]; // flip Y (clip-space +y = up)
-  gl_Position = vec4(cx, cy, 0.0, 1.0);
-
-  v_uv = vec2(
-    a_uvRect.x + a_uvRect.z * dx[vi],
-    a_uvRect.y + a_uvRect.w * dy[vi]
-  );
+  gl_Position = vec4(a_pos, 0.0, 1.0);
+  v_uv = a_uv;
 }
 `;
 
@@ -114,18 +95,18 @@ export class WebGLRasterSurface {
   private _disposed = false;
 
   // Attribute locations
-  private _aPosRect: number;
-  private _aUvRect: number;
+  private _aPos: number;
+  private _aUv: number;
 
   constructor(canvas: HTMLCanvasElement, gl: WebGL2RenderingContext) {
     this._canvas = canvas;
     this._gl = gl;
 
     this._program = this._compileProgram();
-    this._aPosRect = gl.getAttribLocation(this._program, "a_posRect");
-    this._aUvRect = gl.getAttribLocation(this._program, "a_uvRect");
+    this._aPos = gl.getAttribLocation(this._program, "a_pos");
+    this._aUv = gl.getAttribLocation(this._program, "a_uv");
 
-    if (this._aPosRect < 0 || this._aUvRect < 0) {
+    if (this._aPos < 0 || this._aUv < 0) {
       throw new Error("[WebGLRasterSurface] Required shader attributes were optimized out");
     }
 
@@ -173,6 +154,7 @@ export class WebGLRasterSurface {
 
   drawFilmstrip(artifacts: readonly TransportArtifact[], layout: FilmstripLayout): void {
     if (this._disposed || artifacts.length === 0) {
+      console.log(`[WebGLRasterSurface DEBUG] drawFilmstrip early exit: disposed=${this._disposed} artifactsLength=${artifacts.length}`);
       this._clear(layout);
       return;
     }
@@ -183,6 +165,17 @@ export class WebGLRasterSurface {
     const tileCount = Math.max(1, Math.ceil(clipWidthPx / targetTileW));
     const backingW = Math.round(clipWidthPx * dpr);
     const backingH = Math.round(stripHeightPx * dpr);
+
+    console.log(`[WebGLRasterSurface DEBUG] drawFilmstrip layout details:`, {
+      clipWidthPx,
+      stripHeightPx,
+      dpr,
+      targetTileW,
+      tileCount,
+      backingW,
+      backingH,
+      artifactsCount: artifacts.length,
+    });
 
     if (this._canvas.width !== backingW || this._canvas.height !== backingH) {
       this._canvas.width = backingW;
@@ -197,24 +190,36 @@ export class WebGLRasterSurface {
     const cols = Math.min(artifacts.length, 16); // max 16 per row
     const { atlasW, atlasH, cellW, cellH, cells } = packAtlas(artifacts, cols);
 
+    console.log(`[WebGLRasterSurface DEBUG] packed atlas details:`, {
+      cols,
+      atlasW,
+      atlasH,
+      cellW,
+      cellH,
+    });
+
     gl.bindTexture(gl.TEXTURE_2D, this._atlasTexture);
     // Allocate atlas
     gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, atlasW, atlasH, 0, gl.RGBA, gl.UNSIGNED_BYTE, null);
+    const errAlloc = gl.getError();
+    if (errAlloc !== gl.NO_ERROR) {
+      console.error(`[WebGLRasterSurface DEBUG] gl.texImage2D error: ${errAlloc}`);
+    }
 
     // Upload each bitmap into its atlas cell
     // DEFENSIVE: Skip any invalid/closed bitmaps to prevent black gaps
     for (let i = 0; i < artifacts.length; i++) {
       const art = artifacts[i];
       if (!art.bitmap || art.bitmap.width === 0 || art.bitmap.height === 0) {
-        // Bitmap is closed or invalid - skip upload
+        console.warn(`[WebGLRasterSurface DEBUG] Skipping invalid/closed bitmap at index ${i}:`, art);
         continue;
       }
       try {
         const col = i % cols;
         const row = Math.floor(i / cols);
         gl.texSubImage2D(gl.TEXTURE_2D, 0, col * cellW, row * cellH, gl.RGBA, gl.UNSIGNED_BYTE, art.bitmap);
+        console.log(`[WebGLRasterSurface DEBUG] uploaded bitmap at index ${i}: ts=${art.timestampMs} width=${art.bitmap.width} height=${art.bitmap.height}`);
       } catch (e) {
-        // Bitmap was closed between the check and upload - skip silently
         console.warn(`[WebGLRasterSurface] Failed to upload bitmap at index ${i}:`, e);
       }
     }
@@ -222,7 +227,7 @@ export class WebGLRasterSurface {
     // ── Build per-tile geometry ─────────────────────────────────────────────
     // Destination rects are native bitmap pixel crops clipped into fixed tile
     // slots. This avoids stretching low-resolution artifacts across the slot.
-    const FLOATS_PER_VERTEX = 8;
+    const FLOATS_PER_VERTEX = 4;
     const VERTS_PER_TILE = 6;
     const tileW = Math.round(targetTileW * dpr);
     const tileH = backingH;
@@ -230,14 +235,25 @@ export class WebGLRasterSurface {
 
     // Map tiles to artifacts based on timestamp, not array index.
     // This prevents blank gaps when artifacts.length < tileCount (heavy zoom).
-    const firstTimestamp = artifacts[0]?.timestampMs ?? 0;
-    const lastTimestamp = artifacts[artifacts.length - 1]?.timestampMs ?? 0;
+    const hasTrim = layout.trimIn !== undefined && layout.trimOut !== undefined;
+    const firstTimestamp = hasTrim ? layout.trimIn! * 1000 : (artifacts[0]?.timestampMs ?? 0);
+    const lastTimestamp = hasTrim ? layout.trimOut! * 1000 : (artifacts[artifacts.length - 1]?.timestampMs ?? 0);
     const timeSpan = lastTimestamp - firstTimestamp;
 
+    // Calculate pixelsPerSecond derived from total clip duration in seconds
+    const duration = hasTrim ? (layout.trimOut! - layout.trimIn!) : (timeSpan / 1000);
+    const pixelsPerSecond = duration > 0 ? (clipWidthPx / duration) : 100;
+
     for (let i = 0; i < tileCount; i++) {
-      // Find the artifact closest to this tile's timestamp position
-      const tileRatio = tileCount > 1 ? i / (tileCount - 1) : 0;
-      const targetTimestamp = firstTimestamp + timeSpan * tileRatio;
+      // Find the artifact closest to this tile's physical timeline position
+      let targetTimestamp = firstTimestamp;
+      if (hasTrim) {
+        // Linear mapping of the tile start index to timeline time
+        targetTimestamp = (layout.trimIn! + (i * targetTileW) / pixelsPerSecond) * 1000;
+      } else {
+        const tileRatio = tileCount > 1 ? i / (tileCount - 1) : 0;
+        targetTimestamp = firstTimestamp + timeSpan * tileRatio;
+      }
 
       // Find closest valid artifact by timestamp (unbounded - no threshold)
       let artIdx = 0;
@@ -315,17 +331,59 @@ export class WebGLRasterSurface {
 
     for (let i = 0; i < rects.length; i++) {
       const rect = rects[i];
-      for (let v = 0; v < VERTS_PER_TILE; v++) {
-        const off = (i * VERTS_PER_TILE + v) * FLOATS_PER_VERTEX;
-        buf[off + 0] = rect.pos[0];
-        buf[off + 1] = rect.pos[1];
-        buf[off + 2] = rect.pos[2];
-        buf[off + 3] = rect.pos[3];
-        buf[off + 4] = rect.uv[0];
-        buf[off + 5] = rect.uv[1];
-        buf[off + 6] = rect.uv[2];
-        buf[off + 7] = rect.uv[3];
-      }
+      const x0 = rect.pos[0];
+      const y0 = rect.pos[1];
+      const x1 = rect.pos[0] + rect.pos[2];
+      const y1 = rect.pos[1] - rect.pos[3];
+
+      const u0 = rect.uv[0];
+      const v0 = rect.uv[1];
+      const u1 = rect.uv[0] + rect.uv[2];
+      const v1 = rect.uv[1] + rect.uv[3];
+
+      // Triangle 1: TL, BL, TR (Counter-Clockwise)
+      // TL (v=0)
+      let off = (i * VERTS_PER_TILE + 0) * FLOATS_PER_VERTEX;
+      buf[off + 0] = x0;
+      buf[off + 1] = y0;
+      buf[off + 2] = u0;
+      buf[off + 3] = v0;
+
+      // BL (v=1)
+      off = (i * VERTS_PER_TILE + 1) * FLOATS_PER_VERTEX;
+      buf[off + 0] = x0;
+      buf[off + 1] = y1;
+      buf[off + 2] = u0;
+      buf[off + 3] = v1;
+
+      // TR (v=2)
+      off = (i * VERTS_PER_TILE + 2) * FLOATS_PER_VERTEX;
+      buf[off + 0] = x1;
+      buf[off + 1] = y0;
+      buf[off + 2] = u1;
+      buf[off + 3] = v0;
+
+      // Triangle 2: TR, BL, BR (Counter-Clockwise)
+      // TR (v=3)
+      off = (i * VERTS_PER_TILE + 3) * FLOATS_PER_VERTEX;
+      buf[off + 0] = x1;
+      buf[off + 1] = y0;
+      buf[off + 2] = u1;
+      buf[off + 3] = v0;
+
+      // BL (v=4)
+      off = (i * VERTS_PER_TILE + 4) * FLOATS_PER_VERTEX;
+      buf[off + 0] = x0;
+      buf[off + 1] = y1;
+      buf[off + 2] = u0;
+      buf[off + 3] = v1;
+
+      // BR (v=5)
+      off = (i * VERTS_PER_TILE + 5) * FLOATS_PER_VERTEX;
+      buf[off + 0] = x1;
+      buf[off + 1] = y1;
+      buf[off + 2] = u1;
+      buf[off + 3] = v1;
     }
 
     // ── Upload VBO and draw ─────────────────────────────────────────────────
@@ -335,10 +393,10 @@ export class WebGLRasterSurface {
     gl.bufferData(gl.ARRAY_BUFFER, buf, gl.DYNAMIC_DRAW);
 
     const stride = FLOATS_PER_VERTEX * 4;
-    gl.enableVertexAttribArray(this._aPosRect);
-    gl.vertexAttribPointer(this._aPosRect, 4, gl.FLOAT, false, stride, 0);
-    gl.enableVertexAttribArray(this._aUvRect);
-    gl.vertexAttribPointer(this._aUvRect, 4, gl.FLOAT, false, stride, 4 * 4);
+    gl.enableVertexAttribArray(this._aPos);
+    gl.vertexAttribPointer(this._aPos, 2, gl.FLOAT, false, stride, 0);
+    gl.enableVertexAttribArray(this._aUv);
+    gl.vertexAttribPointer(this._aUv, 2, gl.FLOAT, false, stride, 2 * 4);
 
     gl.uniform1i(gl.getUniformLocation(this._program, "u_atlas"), 0);
     gl.activeTexture(gl.TEXTURE0);
@@ -346,6 +404,10 @@ export class WebGLRasterSurface {
 
     // Single draw call for ALL tiles
     gl.drawArrays(gl.TRIANGLES, 0, rects.length * VERTS_PER_TILE);
+    const errDraw = gl.getError();
+    if (errDraw !== gl.NO_ERROR) {
+      console.error(`[WebGLRasterSurface DEBUG] gl.drawArrays error: ${errDraw}`);
+    }
 
     gl.bindVertexArray(null);
   }
