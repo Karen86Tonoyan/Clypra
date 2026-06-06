@@ -142,7 +142,7 @@ const AudioItem: React.FC<AudioItemProps> = ({ item, onAddToTimeline }) => {
       <audio ref={audioRef} src={item.audioUrl} preload="none" onEnded={() => setIsPlaying(false)} onPause={() => setIsPlaying(false)} className="hidden" />
 
       {/* Cover Art with Play Overlay */}
-      <button onClick={handleInlinePlay} disabled={isDownloading} className="relative w-14 h-14 rounded-lg overflow-hidden shrink-0 bg-surface-raised border border-white/10 disabled:opacity-50 disabled:cursor-not-allowed group/cover">
+      <button onClick={handleInlinePlay} disabled={isDownloading} className="relative w-14 h-14 rounded-lg overflow-hidden shrink-0 bg-surface-raised border border-white/10 disabled:opacity-50 disabled:cursor-not-allowed group/cover cursor-pointer">
         {item.coverArtUrl && !imageError ? (
           <img src={item.coverArtUrl} alt={item.name} className="w-full h-full object-cover" onError={() => setImageError(true)} />
         ) : (
@@ -197,7 +197,7 @@ const AudioItem: React.FC<AudioItemProps> = ({ item, onAddToTimeline }) => {
       <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
         <Tooltip>
           <TooltipTrigger asChild>
-            <button onClick={handleAddToTimeline} disabled={isDownloading} className="w-9 h-9 flex items-center justify-center hover:bg-white/10 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
+            <button onClick={handleAddToTimeline} disabled={isDownloading} className="w-9 h-9 flex items-center justify-center hover:bg-white/10 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer">
               {isDownloading ? <Download className="w-4 h-4 text-accent animate-pulse" /> : <Plus className="w-4 h-4 text-text-primary" />}
             </button>
           </TooltipTrigger>
