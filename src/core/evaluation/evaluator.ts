@@ -183,6 +183,14 @@ export function evaluateTimelineScene(time: number, clips: Clip[], tracks: Track
       blendMode: (clip as any).blendMode || "normal",
     };
 
+    console.log(`[Evaluator DEBUG] Created ${asset.type} layer for clip ${clip.id}:`, {
+      layerId: mediaLayer.layerId,
+      sourcePath: mediaLayer.sourcePath,
+      dimensions: `${evalW}x${evalH}`,
+      position: `${evalX},${evalY}`,
+      opacity: mediaLayer.opacity,
+    });
+
     visualLayers.push(mediaLayer);
   }
 
