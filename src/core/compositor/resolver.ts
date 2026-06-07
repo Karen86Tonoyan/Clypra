@@ -103,10 +103,11 @@ function compareRenderLayers(a: RenderLayer, b: RenderLayer): number {
   const roleOrder = getRoleOrder(a.clip.role) - getRoleOrder(b.clip.role);
   if (roleOrder !== 0) return roleOrder;
 
-  // 2. Compare by track index (LOWER index in UI = render on top)
-  // Track 0 is at the top of the UI and should render on TOP of the image
-  // Track 1 is below it and should render BELOW
-  const trackOrder = a.clip.trackIndex - b.clip.trackIndex;
+  // 2. Compare by track index (INVERTED: higher track index renders BELOW lower track index)
+  // This makes the top track in the UI (index 0) render on top
+  // Track 0 = top of UI = renders LAST (on top)
+  // Track 1 = below Track 0 = renders FIRST (underneath)
+  const trackOrder = b.clip.trackIndex - a.clip.trackIndex;
   if (trackOrder !== 0) return trackOrder;
 
   // 3. Compare by z-index
