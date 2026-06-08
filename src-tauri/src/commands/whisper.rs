@@ -109,14 +109,12 @@ pub async fn list_downloaded_models(
     let entries = std::fs::read_dir(&models_dir)
         .map_err(|e| format!("Failed to read models directory: {}", e))?;
 
-    for entry in entries {
-        if let Ok(entry) = entry {
-            let path = entry.path();
-            if path.is_file() {
-                if let Some(stem) = path.file_stem() {
-                    if let Some(name) = stem.to_str() {
-                        models.push(name.to_string());
-                    }
+    for entry in entries.flatten() {
+        let path = entry.path();
+        if path.is_file() {
+            if let Some(stem) = path.file_stem() {
+                if let Some(name) = stem.to_str() {
+                    models.push(name.to_string());
                 }
             }
         }
