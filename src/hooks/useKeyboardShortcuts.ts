@@ -220,7 +220,7 @@ export const useKeyboardShortcuts = () => {
         setTimeout(() => setToastMessage(null), 2000);
       } else if (e.key === "s" && !isMeta) {
         e.preventDefault();
-        const results = EditingActions.splitAllAtPlayhead();
+        const results = EditingActions.splitAtPlayhead();
 
         if (results.length === 0) {
           setToastMessage("No clips under playhead to split");
