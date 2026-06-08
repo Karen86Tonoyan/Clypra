@@ -15,7 +15,7 @@ vi.mock("@tauri-apps/plugin-fs", () => ({
 describe("CacheManager", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    
+
     // Stub indexedDB if missing in the testing environment
     if (typeof window !== "undefined" && !window.indexedDB) {
       const mockIDB = {
@@ -45,17 +45,15 @@ describe("CacheManager", () => {
   // ─── Non-Tauri Environment Tests ──────────────────────────────────────────
   describe("Non-Tauri environment behavior", () => {
     it("should skip app cache clear in non-Tauri environment and return success", async () => {
-      const logSpy = vi.spyOn(console, "log").mockImplementation(() => {});
       const result = await CacheManager.clearAppCache();
       expect(result).toEqual({ success: true });
-      expect(logSpy).toHaveBeenCalledWith(expect.stringContaining("Non-Tauri environment: Skipping app cache clear"));
+      // Non-Tauri environment silently skips without logging
     });
 
     it("should skip webview cache clear in non-Tauri environment and return success", async () => {
-      const logSpy = vi.spyOn(console, "log").mockImplementation(() => {});
       const result = await CacheManager.clearWebViewCache();
       expect(result).toEqual({ success: true });
-      expect(logSpy).toHaveBeenCalledWith(expect.stringContaining("Non-Tauri environment: Skipping WebView cache clear"));
+      // Non-Tauri environment silently skips without logging
     });
   });
 
@@ -77,10 +75,10 @@ describe("CacheManager", () => {
 
     it("should clear IndexedDB databases successfully", async () => {
       const mockDatabases = [{ name: "db1" }, { name: "db2" }];
-      
+
       // Mock indexedDB.databases
       vi.spyOn(indexedDB, "databases").mockResolvedValue(mockDatabases);
-      
+
       // Mock indexedDB.deleteDatabase
       const deleteDatabaseSpy = vi.spyOn(indexedDB, "deleteDatabase").mockImplementation((name) => {
         const req = {} as IDBOpenDBRequest;

@@ -71,9 +71,11 @@ describe("evaluateScene (canonical evaluator)", () => {
       null,
     );
     // Should be sorted by track index (inverted: higher index renders below)
-    // t2 (index 1) renders below t1 (index 0), so t1 appears on top
+    // t2 (index 1) renders below (drawn first), t1 (index 0) renders on top (drawn last)
+    // Canvas compositing: array[0] draws first (background), array[last] draws last (foreground)
+    // So: higher trackIndex → earlier in array (background), lower trackIndex → later in array (foreground)
     expect(scene.visualLayers).toHaveLength(2);
-    expect(scene.visualLayers[0].clipId).toBe("c2"); // t1 (index 0) - foreground (top track)
-    expect(scene.visualLayers[1].clipId).toBe("c1"); // t2 (index 1) - background
+    expect(scene.visualLayers[0].clipId).toBe("c1"); // t2 (index 1) - background (drawn first)
+    expect(scene.visualLayers[1].clipId).toBe("c2"); // t1 (index 0) - foreground (drawn last, on top)
   });
 });

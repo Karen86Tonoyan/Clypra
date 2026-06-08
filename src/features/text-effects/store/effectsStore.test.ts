@@ -3,6 +3,14 @@ import { describe, test, expect, vi, beforeEach, afterEach } from "vitest";
 import { useEffectsStore } from "./effectsStore";
 import { ClypraApi } from "../api/clypraApi";
 
+// Mock the persistent cache
+vi.mock("../cache/persistentCache", () => ({
+  getTextEffectCache: vi.fn(() => ({
+    get: vi.fn().mockResolvedValue(null),
+    set: vi.fn().mockResolvedValue(undefined),
+  })),
+}));
+
 const mockIndexItems = [
   {
     id: "solaris-ink",
@@ -11,7 +19,7 @@ const mockIndexItems = [
     isPremium: false,
     previewType: "static",
     thumbnailUrl: "https://raw.githubusercontent.com/AIEraDev/clypra-api/main/data/thumbnails/solaris-ink.png",
-  }
+  },
 ];
 
 const mockFullDefinition = {
@@ -92,10 +100,10 @@ describe("useEffectsStore", () => {
     } as any);
 
     const selectPromise = useEffectsStore.getState().selectEffect("solaris-ink", "metallic");
-    
+
     // Check in-flight loading state
     expect(useEffectsStore.getState().loadingId).toBe("solaris-ink");
-    
+
     await selectPromise;
 
     const state = useEffectsStore.getState();
@@ -121,7 +129,7 @@ describe("useEffectsStore", () => {
 
   test("prefetchEffect - background fetch hold to cache", async () => {
     const fetchMock = vi.mocked(fetch);
-    
+
     // Create a deferred promise to control when fetch resolves
     let resolveFetch: any;
     const fetchPromise = new Promise((resolve) => {
@@ -132,7 +140,7 @@ describe("useEffectsStore", () => {
       fetchPromise.then(() => ({
         ok: true,
         json: async () => mockFullDefinition,
-      })) as any
+      })) as any,
     );
 
     useEffectsStore.getState().prefetchEffect("solaris-ink", "metallic");
@@ -142,7 +150,7 @@ describe("useEffectsStore", () => {
 
     // Resolve network request
     resolveFetch();
-    
+
     // Wait for event loop ticks
     await new Promise((r) => setTimeout(r, 10));
 
@@ -179,17 +187,19 @@ describe("useEffectsStore", () => {
 
   test("fetchDefinitionOnlyById - falls back to local loaded indexes first", async () => {
     const fetchMock = vi.mocked(fetch);
-    // Populate store state index with solaris-ink in metallic category
+
+    // Start with clean state - reset definitions to only include built-in presets (empty for test)
     useEffectsStore.setState({
+      definitions: {}, // Clear any cached definitions
       index: {
         metallic: [
           {
             id: "solaris-ink",
             name: "Solaris Ink",
             category: "metallic",
-          } as any
-        ]
-      }
+          } as any,
+        ],
+      },
     });
 
     // Mock fetch for getDefinitionById
@@ -201,6 +211,7 @@ describe("useEffectsStore", () => {
     const def = await useEffectsStore.getState().fetchDefinitionOnlyById("solaris-ink");
 
     expect(def).toEqual(mockFullDefinition);
+    // When an item is in the loaded index, getDefinitionById is called which fetches from API
     expect(fetchMock).toHaveBeenCalledWith("https://clypra-worker-api.abdulkabirmusa.com/effects/metallic/solaris-ink", expect.any(Object));
   });
 
@@ -210,7 +221,7 @@ describe("useEffectsStore", () => {
     // 1. global index fetch fails or doesn't have it
     fetchMock.mockResolvedValueOnce({
       ok: true,
-      json: async () => [] // Empty global index
+      json: async () => [], // Empty global index
     } as any);
 
     // 2. Scanning categories: first few categories return 404/empty, outline returns the match
@@ -232,21 +243,19 @@ describe("useEffectsStore", () => {
     // outline (found!)
     fetchMock.mockResolvedValueOnce({
       ok: true,
-      json: async () => [
-        { id: "arctic-monolith", name: "Arctic Monolith", category: "outline" }
-      ]
+      json: async () => [{ id: "arctic-monolith", name: "Arctic Monolith", category: "outline" }],
     } as any);
     // 3. fetch definition for outline/arctic-monolith
     fetchMock.mockResolvedValueOnce({
       ok: true,
-      json: async () => ({ id: "arctic-monolith", name: "Arctic Monolith", category: "outline", font: {}, fills: [], strokes: [], shadows: [] })
+      json: async () => ({ id: "arctic-monolith", name: "Arctic Monolith", category: "outline", font: {}, fills: [], strokes: [], shadows: [] }),
     } as any);
 
     const def = await useEffectsStore.getState().fetchDefinitionOnlyById("arctic-monolith");
 
     expect(def.id).toBe("arctic-monolith");
     expect(def.category).toBe("outline");
-    
+
     // Check that category index was cached in state
     expect(useEffectsStore.getState().index["outline"]).toBeDefined();
     expect(useEffectsStore.getState().index["outline"][0].id).toBe("arctic-monolith");
@@ -261,7 +270,7 @@ describe("useEffectsStore", () => {
       font: {},
       fills: [],
       strokes: [],
-      shadows: []
+      shadows: [],
     };
 
     fetchMock.mockResolvedValueOnce({
