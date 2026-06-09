@@ -22,7 +22,7 @@ interface ClipProps {
   pixelsPerSecond: number;
   selected?: boolean;
   locked?: boolean;
-  onDragStart?: (clipId: string, startX: number, startY: number) => void;
+  onDragStart?: (clipId: string, startX: number, startY: number, pointerOffsetFromLeft?: number) => void;
   onDragMove?: (clipId: string, deltaX: number, deltaY: number, clientX: number, clientY: number) => void;
   onDragEnd?: (clipId: string) => void;
   dragState?: {
@@ -41,7 +41,7 @@ const ClipInner: React.FC<ClipProps> = ({ clip, mediaAsset, pixelsPerSecond, sel
   const [isHovered, setIsHovered] = useState(false);
   const [resizeStart, setResizeStart] = useState<{ x: number; startTime: number; duration: number; trimIn: number; trimOut: number; isRipple: boolean } | null>(null);
   const clipRef = useRef<HTMLDivElement>(null);
-  const dragStartRef = useRef<{ startX: number; startY: number; startTime: number; hasMoved: boolean; hasDragStarted: boolean; pointerId: number } | null>(null);
+  const dragStartRef = useRef<{ startX: number; startY: number; startTime: number; hasMoved: boolean; hasDragStarted: boolean; pointerId: number; pointerOffsetFromLeft?: number } | null>(null);
   const isPointerOnResizeHandle = (target: EventTarget | null) => {
     const el = target as HTMLElement | null;
     if (!el) return false;
@@ -82,6 +82,9 @@ const ClipInner: React.FC<ClipProps> = ({ clip, mediaAsset, pixelsPerSecond, sel
       selectClip(clip.id);
     }
 
+    // Calculate offset from clip's left edge to cursor for proper drag anchoring
+    const pointerOffsetFromLeft = e.clientX - rect.left;
+
     dragStartRef.current = {
       startX: e.clientX,
       startY: e.clientY,
@@ -89,6 +92,7 @@ const ClipInner: React.FC<ClipProps> = ({ clip, mediaAsset, pixelsPerSecond, sel
       hasMoved: false,
       hasDragStarted: false,
       pointerId: e.pointerId,
+      pointerOffsetFromLeft, // Store where cursor is within the clip
     };
 
     // Capture pointer for smooth dragging
@@ -110,7 +114,7 @@ const ClipInner: React.FC<ClipProps> = ({ clip, mediaAsset, pixelsPerSecond, sel
       dragStartRef.current.hasMoved = true;
       if (!dragStartRef.current.hasDragStarted) {
         dragStartRef.current.hasDragStarted = true;
-        onDragStart?.(clip.id, dragStartRef.current.startX, dragStartRef.current.startY);
+        onDragStart?.(clip.id, dragStartRef.current.startX, dragStartRef.current.startY, dragStartRef.current.pointerOffsetFromLeft);
       }
     }
 

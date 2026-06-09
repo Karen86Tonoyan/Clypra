@@ -155,7 +155,7 @@ export function useTimelineDrag(containerRef: RefObject<HTMLDivElement | null>) 
   }, []);
 
   const handleClipDragStart = useCallback(
-    (clipId: string, startX: number, startY: number) => {
+    (clipId: string, startX: number, startY: number, pointerOffsetFromLeft?: number) => {
       const clip = clipMapRef.current.get(clipId);
       if (!clip) return;
       suspendAutoSave();
@@ -207,10 +207,14 @@ export function useTimelineDrag(containerRef: RefObject<HTMLDivElement | null>) 
         pointerXContentStart = startX - cr.left + container.scrollLeft;
       }
 
+      // Calculate initial offsetX so clip stays under cursor
+      // pointerOffsetFromLeft tells us where the cursor is within the clip
+      const initialOffsetX = pointerOffsetFromLeft !== undefined ? -pointerOffsetFromLeft : 0;
+
       const nextDragState: DragState = {
         draggingClipId: clipId,
         draggedClipIds,
-        offsetX: 0, // Start at original position - clip stays under cursor
+        offsetX: initialOffsetX, // Start with cursor offset so clip stays under cursor
         offsetY: 0,
         pointerXContentStart,
         pointerClientYStart,
