@@ -5,6 +5,7 @@ import { useUIStore } from "@/store/uiStore";
 import { useTimeline } from "@/hooks/useTimeline";
 import { Clip } from "./Clip";
 import { handleDropOnTrack } from "@/lib/timelineUtils";
+import { calculateDisplayPositions } from "@/lib/clipPositions";
 import type { Clip as ClipType, Track as TrackType, DragItem } from "@/types";
 
 interface TrackProps {
@@ -16,6 +17,7 @@ interface TrackProps {
   onClipDragEnd?: (clipId: string) => void;
   dragState?: {
     draggingClipId: string | null;
+    draggedClipIds?: string[];
     offsetX: number;
     offsetY: number;
     isInvalidPosition?: boolean;
@@ -51,28 +53,25 @@ const TrackInner: React.FC<TrackProps> = ({ track, pixelsPerSecond, clips, onCli
   // Get all clips for this track (stable array ref when clips + track.id unchanged — helps memoized children)
   const trackClips = useMemo(() => clips.filter((c) => c.trackId === track.id), [clips, track.id]);
 
-  // Chronological order for gap shifts — must NOT sort `trackClips` in place while `.map()` iterates it.
+  // Chronological order for gap shifts
   const sortedTrackClips = useMemo(() => [...trackClips].sort((a, b) => a.startTime - b.startTime), [trackClips]);
 
-  // Calculate shifted positions for gap engine (not the clip being dragged — it already uses offsetX/Y)
-  const getDisplayStartTime = (clip: ClipType) => {
-    if (dragState?.draggingClipId === clip.id) {
-      return clip.startTime;
-    }
-    // Only shift if dragging and this is the target track
-    if (dragState?.targetTrackId === track.id && dragState.insertionIndex != null && dragState.gapStartTime != null && dragState.gapDuration != null) {
-      const clipIndex = sortedTrackClips.findIndex((c) => c.id === clip.id);
-      const insertionIndex = dragState.insertionIndex;
-      const gapDuration = dragState.gapDuration;
-
-      if (clipIndex >= insertionIndex) {
-        // Shift clips at or after insertion point
-        return clip.startTime + gapDuration;
-      }
+  // Calculate display positions using shared utility (single source of truth)
+  const displayPositions = useMemo(() => {
+    if (!dragState || dragState.targetTrackId !== track.id || dragState.insertionIndex === null || dragState.gapDuration === null) {
+      // No drag affecting this track: clips render at actual positions
+      return null;
     }
 
-    return clip.startTime;
-  };
+    const draggedClipIds = dragState.draggedClipIds ?? (dragState.draggingClipId ? [dragState.draggingClipId] : []);
+
+    return calculateDisplayPositions({
+      trackClips: sortedTrackClips,
+      draggedClipIds,
+      draggedBlockDuration: dragState.gapDuration as number, // Type-safe: null check above
+      insertionIndex: dragState.insertionIndex as number, // Type-safe: null check above
+    });
+  }, [dragState, track.id, sortedTrackClips]);
 
   return (
     <div
@@ -88,7 +87,12 @@ const TrackInner: React.FC<TrackProps> = ({ track, pixelsPerSecond, clips, onCli
         trackClips.map((clip) => {
           const isDragging = dragState?.draggingClipId === clip.id;
 
-          const displayStartTime = getDisplayStartTime(clip);
+          // Dragged clip uses original position + offsetX transform (NOT displayPositions map)
+          // Other clips use displayPositions map (which handles gap opening/closing)
+          let displayStartTime = clip.startTime;
+          if (!isDragging && displayPositions) {
+            displayStartTime = displayPositions.get(clip.id) ?? clip.startTime;
+          }
           const isShifted = displayStartTime !== clip.startTime;
 
           // Override clip's startTime for display if shifted

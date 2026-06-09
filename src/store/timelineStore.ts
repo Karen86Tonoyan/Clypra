@@ -704,17 +704,18 @@ export const useTimelineStore = create<TimelineStore>(
       const clip = state.clips.find((c) => c.id === clipId);
       if (!clip) return;
 
-      // Get all clips on target track (excluding the dragged clip)
-      const trackClips = state.clips.filter((c) => c.trackId === trackId && c.id !== clipId).sort((a, b) => a.startTime - b.startTime);
-
       // Check if clip is already at target position (no-op detection)
       if (clip.trackId === trackId) {
-        const currentIndex = trackClips.findIndex((c) => c.id === clipId);
+        const allTrackClips = state.clips.filter((c) => c.trackId === trackId).sort((a, b) => a.startTime - b.startTime);
+        const currentIndex = allTrackClips.findIndex((c) => c.id === clipId);
         if (currentIndex === index) {
           // No-op: clip is already at target position, don't shift anything
           return;
         }
       }
+
+      // Get all clips on target track (excluding the dragged clip)
+      const trackClips = state.clips.filter((c) => c.trackId === trackId && c.id !== clipId).sort((a, b) => a.startTime - b.startTime);
 
       // Insert clip at index
       trackClips.splice(index, 0, clip);
