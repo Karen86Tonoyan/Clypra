@@ -87,6 +87,7 @@ export interface DragState {
   isInvalidPosition?: boolean;
   willCreateNewTrack?: boolean;
   newTrackPosition?: "above" | "below" | null;
+  pointerOffsetFromLeft?: number; // Where user clicked within the clip
 }
 
 export function useTimelineDrag(containerRef: RefObject<HTMLDivElement | null>) {
@@ -202,14 +203,14 @@ export function useTimelineDrag(containerRef: RefObject<HTMLDivElement | null>) 
         pointerXContentStart = startX - cr.left + container.scrollLeft;
       }
 
-      // Calculate initial offsetX so clip stays under cursor
-      // pointerOffsetFromLeft tells us where the cursor is within the clip
-      const initialOffsetX = pointerOffsetFromLeft !== undefined ? -pointerOffsetFromLeft : 0;
+      // Calculate initial offsetX - should be 0 since clip hasn't moved yet
+      // We'll account for pointerOffsetFromLeft when calculating target positions during drag
+      const initialOffsetX = 0;
 
       const nextDragState: DragState = {
         draggingClipId: clipId,
         draggedClipIds,
-        offsetX: initialOffsetX, // Start with cursor offset so clip stays under cursor
+        offsetX: initialOffsetX,
         offsetY: 0,
         pointerXContentStart,
         pointerClientYStart,
@@ -226,6 +227,7 @@ export function useTimelineDrag(containerRef: RefObject<HTMLDivElement | null>) 
         isInvalidPosition: false,
         willCreateNewTrack: false,
         newTrackPosition: null,
+        pointerOffsetFromLeft, // Store for use during drag
       };
       dragStateRef.current = nextDragState;
       setDragState(nextDragState);
@@ -247,7 +249,10 @@ export function useTimelineDrag(containerRef: RefObject<HTMLDivElement | null>) 
     const cr = container.getBoundingClientRect();
     const pointerXContent = clientX - cr.left + container.scrollLeft;
     const contentDeltaPx = pointerXContent - ds.pointerXContentStart;
-    const offsetX = contentDeltaPx + ds.visualLeftAnchorDelta;
+    // Calculate offsetX so clip stays under cursor at the clicked point
+    // Subtract pointerOffsetFromLeft so the clicked point stays under cursor
+    const pointerOffset = ds.pointerOffsetFromLeft ?? 0;
+    const offsetX = contentDeltaPx - pointerOffset;
     const offsetY = clientY - ds.pointerClientYStart;
 
     const { clips: liveClips, tracks: liveTracks } = useTimelineStore.getState();
