@@ -54,6 +54,10 @@ interface TimelineStore {
   rippleEditEnabled: boolean;
   clipDragMode: "free" | "insert" | "ripple";
   snapEnabled: boolean;
+  /** Active snap guides (vertical alignment indicators during resize/drag) */
+  snapGuides: Array<{ time: number; type: "clip-start" | "clip-end" | "playhead" }>;
+  setSnapGuides: (guides: Array<{ time: number; type: "clip-start" | "clip-end" | "playhead" }>) => void;
+  clearSnapGuides: () => void;
   /** @internal Batch nesting depth — do not read directly */
   _batchDepth: number;
   /** @internal Deferred epoch flag — do not read directly */
@@ -129,8 +133,12 @@ export const useTimelineStore = create<TimelineStore>(
     rippleEditEnabled: false,
     clipDragMode: "free",
     snapEnabled: true,
+    snapGuides: [],
     _batchDepth: 0,
     _pendingEpochIncrement: false,
+
+    setSnapGuides: (guides) => set({ snapGuides: guides }),
+    clearSnapGuides: () => set({ snapGuides: [] }),
 
     withBatch: (fn) => {
       set((state) => ({ _batchDepth: state._batchDepth + 1 }));

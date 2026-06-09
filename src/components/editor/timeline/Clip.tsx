@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from "react";
 import { useUIStore } from "@/store/uiStore";
 import { useTimelineStore } from "@/store/timelineStore";
+import { usePlayback } from "@/hooks/usePlayback";
 import type { Clip as ClipType, MediaAsset } from "@/types";
 import { ClipFilmstrip } from "./ClipFilmstrip";
 import { TimelineWaveform } from "./TimelineWaveform";
@@ -10,6 +11,7 @@ const DRAG_THRESHOLD_PX = 6;
 const RESIZE_TRACE = true;
 const MAX_STILL_CLIP_DURATION_SEC = 60 * 60; // 1 hour guardrail for stills
 const MIN_TRIM_DURATION_SEC = 1;
+const SNAP_THRESHOLD_SECONDS = 0.1; // Snap when within 100ms
 const traceResize = (...args: unknown[]) => {
   if (!RESIZE_TRACE) return;
 };
@@ -33,7 +35,8 @@ interface ClipProps {
 
 const ClipInner: React.FC<ClipProps> = ({ clip, mediaAsset, pixelsPerSecond, selected, locked = false, onDragStart, onDragMove, onDragEnd, dragState }) => {
   const { selectClip, toggleClipSelection } = useUIStore();
-  const { clips, updateClip, rippleEditEnabled, rippleTrimClip, scrollLeft, viewportWidth } = useTimelineStore();
+  const { clips, updateClip, rippleEditEnabled, rippleTrimClip, scrollLeft, viewportWidth, snapEnabled, setSnapGuides, clearSnapGuides } = useTimelineStore();
+  const { currentTime } = usePlayback();
   const [isResizing, setIsResizing] = useState<"left" | "right" | null>(null);
   const [isHovered, setIsHovered] = useState(false);
   const [resizeStart, setResizeStart] = useState<{ x: number; startTime: number; duration: number; trimIn: number; trimOut: number; isRipple: boolean } | null>(null);
@@ -252,6 +255,8 @@ const ClipInner: React.FC<ClipProps> = ({ clip, mediaAsset, pixelsPerSecond, sel
       const isRippleActive = e.shiftKey || rippleEditEnabled;
 
       const trackClips = clips.filter((c) => c.trackId === clip.trackId && c.id !== clip.id);
+      const allClips = clips.filter((c) => c.id !== clip.id);
+
       const prevClipEnd = trackClips.reduce((maxEnd, c) => {
         const end = c.startTime + c.duration;
         if (end <= resizeStart.startTime + 1e-6) return Math.max(maxEnd, end);
@@ -262,6 +267,53 @@ const ClipInner: React.FC<ClipProps> = ({ clip, mediaAsset, pixelsPerSecond, sel
         return minStart;
       }, Number.POSITIVE_INFINITY);
 
+      // Snap detection logic
+      let snappedTime: number | null = null;
+      let snapGuides: Array<{ time: number; type: "clip-start" | "clip-end" | "playhead" }> = [];
+
+      if (snapEnabled) {
+        // Calculate the edge time we're moving
+        const currentEdgeTime = isResizing === "left" ? resizeStart.startTime + deltaTime : resizeStart.startTime + resizeStart.duration + deltaTime;
+
+        // Build snap candidates
+        const snapCandidates: Array<{ time: number; type: "clip-start" | "clip-end" | "playhead" }> = [];
+
+        // Add playhead position
+        if (currentTime !== undefined) {
+          snapCandidates.push({ time: currentTime, type: "playhead" });
+        }
+
+        // Add all other clip edges (across all tracks for professional alignment)
+        for (const c of allClips) {
+          snapCandidates.push({ time: c.startTime, type: "clip-start" });
+          snapCandidates.push({ time: c.startTime + c.duration, type: "clip-end" });
+        }
+
+        // Find closest snap point
+        let bestCandidate: (typeof snapCandidates)[0] | null = null;
+        let bestDistance = SNAP_THRESHOLD_SECONDS;
+
+        for (const candidate of snapCandidates) {
+          const distance = Math.abs(candidate.time - currentEdgeTime);
+          if (distance < bestDistance) {
+            bestDistance = distance;
+            bestCandidate = candidate;
+          }
+        }
+
+        if (bestCandidate) {
+          snappedTime = bestCandidate.time;
+          snapGuides = [bestCandidate];
+        }
+      }
+
+      // Update snap guides in store
+      if (snapGuides.length > 0) {
+        setSnapGuides(snapGuides);
+      } else {
+        clearSnapGuides();
+      }
+
       traceResize("pointermove", {
         clipId: clip.id,
         side: isResizing,
@@ -270,6 +322,7 @@ const ClipInner: React.FC<ClipProps> = ({ clip, mediaAsset, pixelsPerSecond, sel
         deltaX,
         deltaTime,
         ripple: isRippleActive,
+        snappedTime,
       });
 
       if (isRippleActive) {
@@ -288,6 +341,17 @@ const ClipInner: React.FC<ClipProps> = ({ clip, mediaAsset, pixelsPerSecond, sel
         });
       } else {
         // STANDARD MODE: Normal trim (no ripple)
+
+        // Apply snap adjustment if snapping is active
+        let adjustedDeltaTime = deltaTime;
+        if (snappedTime !== null) {
+          if (isResizing === "left") {
+            adjustedDeltaTime = snappedTime - resizeStart.startTime;
+          } else {
+            adjustedDeltaTime = snappedTime - (resizeStart.startTime + resizeStart.duration);
+          }
+        }
+
         if (isResizing === "left") {
           // Resize from left (trim in)
           const minDuration = MIN_TRIM_DURATION_SEC;
@@ -295,8 +359,8 @@ const ClipInner: React.FC<ClipProps> = ({ clip, mediaAsset, pixelsPerSecond, sel
           const maxMediaTime = isStill ? MAX_STILL_CLIP_DURATION_SEC : (mediaAsset?.duration ?? resizeStart.trimOut);
           const maxTrimIn = Math.min(maxMediaTime, resizeStart.trimOut - 0.001);
 
-          // Desired new trimIn based on pointer movement; clamp instead of freezing.
-          const desiredStartTime = resizeStart.startTime + deltaTime;
+          // Desired new trimIn based on pointer movement (with snap); clamp instead of freezing.
+          const desiredStartTime = resizeStart.startTime + adjustedDeltaTime;
           const desiredDelta = desiredStartTime - resizeStart.startTime;
 
           // Clamp delta by: timeline start, minimum duration, and media trimIn bounds.
@@ -329,7 +393,7 @@ const ClipInner: React.FC<ClipProps> = ({ clip, mediaAsset, pixelsPerSecond, sel
           const maxDurationByNextClip = Number.isFinite(nextClipStart) ? Math.max(minDuration, nextClipStart - resizeStart.startTime) : Number.POSITIVE_INFINITY;
           const maxDuration = Math.min(maxDurationByMedia, maxDurationByNextClip);
 
-          const desiredDuration = resizeStart.duration + deltaTime;
+          const desiredDuration = resizeStart.duration + adjustedDeltaTime;
           const newDuration = Math.max(minDuration, Math.min(desiredDuration, maxDuration));
           const unclampedTrimOut = resizeStart.trimIn + newDuration;
           const newTrimOut = isStill ? unclampedTrimOut : Math.min(unclampedTrimOut, maxMediaTime);
@@ -360,6 +424,9 @@ const ClipInner: React.FC<ClipProps> = ({ clip, mediaAsset, pixelsPerSecond, sel
       activeResizeHandleRef.current = null;
       resizePointerIdRef.current = null;
       document.body.style.userSelect = "";
+
+      // Clear snap guides when resize ends
+      clearSnapGuides();
     };
 
     const handlePointerUp = (e: PointerEvent) => {
@@ -395,7 +462,7 @@ const ClipInner: React.FC<ClipProps> = ({ clip, mediaAsset, pixelsPerSecond, sel
         side: isResizing,
       });
     };
-  }, [isResizing, resizeStart, clip.id, pixelsPerSecond, updateClip, rippleTrimClip, mediaAsset]);
+  }, [isResizing, resizeStart, clip.id, pixelsPerSecond, updateClip, rippleTrimClip, mediaAsset, clips, snapEnabled, currentTime, setSnapGuides, clearSnapGuides]);
 
   const formatDuration = (seconds: number) => {
     const mins = Math.floor(seconds / 60);

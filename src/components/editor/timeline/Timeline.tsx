@@ -25,7 +25,7 @@ const traceSelect = (...args: unknown[]) => {
 };
 
 export const Timeline: React.FC = () => {
-  const { tracks, clips, pixelsPerSecond, scrollLeft, setScrollLeft, getTimelineEndTime, setViewportWidth } = useTimelineStore();
+  const { tracks, clips, pixelsPerSecond, scrollLeft, setScrollLeft, getTimelineEndTime, setViewportWidth, snapGuides } = useTimelineStore();
 
   const { previewMode, clearSelection } = useUIStore();
   const { exitSourceMode } = usePreviewMode();
@@ -287,6 +287,25 @@ export const Timeline: React.FC = () => {
                   )}
 
                   <Playhead pixelsPerSecond={pixelsPerSecond} duration={duration} containerRef={containerRef} rulerHeight={24} />
+
+                  {/* Snap Guides - Vertical alignment indicators */}
+                  {snapGuides.map((guide, index) => {
+                    const guideLeft = guide.time * pixelsPerSecond;
+                    const guideColor = guide.type === "playhead" ? "#3b82f6" : "#10b981"; // Blue for playhead, green for clips
+
+                    return (
+                      <div
+                        key={`snap-guide-${index}-${guide.time}`}
+                        className="absolute top-0 bottom-0 pointer-events-none z-60"
+                        style={{
+                          left: `${guideLeft}px`,
+                          width: "2px",
+                          background: guideColor,
+                          boxShadow: `0 0 8px ${guideColor}`,
+                        }}
+                      />
+                    );
+                  })}
                 </>
               )}
             </div>
