@@ -35,7 +35,7 @@ export const useSettingsStore = create<SettingsStore>()(
       fontFamily: "inter",
       customTheme: null,
       snapToGrid: true,
-      autoRipple: false,
+      autoRipple: true,
       autoSave: true,
       defaultFrameRate: 30,
       previewQuality: "high",

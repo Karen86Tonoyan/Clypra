@@ -2,7 +2,9 @@ import React, { useRef, useEffect, useCallback } from "react";
 import { useTimelineStore } from "@/store/timelineStore";
 import { useUIStore } from "@/store/uiStore";
 import { useHistoryStore } from "@/store/historyStore";
+import { useSettingsStore } from "@/store/settingsStore";
 import { RippleDeleteCommand } from "@/core/history/commands/RippleDeleteCommand";
+import { DeleteClipCommand } from "@/core/history/commands/DeleteClipCommand";
 import { usePreviewMode } from "@/hooks/usePreviewMode";
 import { usePlayback } from "@/hooks/usePlayback";
 import { getTimelineViewportEnd } from "@/lib/timelineClip";
@@ -138,6 +140,7 @@ export const Timeline: React.FC = () => {
       const store = useTimelineStore.getState();
       const { normalizeTrack, removeEmptyNonMainTracks, withBatch } = store;
       const { execute, beginTransaction, commitTransaction } = useHistoryStore.getState();
+      const { autoRipple } = useSettingsStore.getState();
       const affectedTracks = new Set<string>();
 
       beginTransaction("Delete Clips");
@@ -146,7 +149,12 @@ export const Timeline: React.FC = () => {
         const clip = store.clips.find((c) => c.id === clipId);
         if (clip) {
           affectedTracks.add(clip.trackId);
-          execute(new RippleDeleteCommand(clipId));
+          // Use ripple delete if auto-ripple is enabled, otherwise regular delete
+          if (autoRipple) {
+            execute(new RippleDeleteCommand(clipId));
+          } else {
+            execute(new DeleteClipCommand(clipId));
+          }
         }
       });
 

@@ -5,9 +5,10 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/comp
 import { useTimelineStore } from "@/store/timelineStore";
 import { useUIStore } from "@/store/uiStore";
 import { generateId } from "@/lib/id";
-// import { useSettingsStore } from "@/store/settingsStore";
+import { useSettingsStore } from "@/store/settingsStore";
 import { useHistoryStore } from "@/store/historyStore";
 import { RippleDeleteCommand } from "@/core/history/commands/RippleDeleteCommand";
+import { DeleteClipCommand } from "@/core/history/commands/DeleteClipCommand";
 import { SuccessToast } from "@/components/ui/SuccessToast";
 import { DEFAULT_SRP_CONFIG, SpatialTier } from "@/lib/renderEngine/types";
 import { clampTimelineZoom, formatCadenceSeconds, getSrpTierForZoom, getTimelineTemporalDetail, getZoomFromRatio, getZoomRatio, snapTimelineZoomToTierAnchors, TIMELINE_TIER_LABELS, TIMELINE_ZOOM_MAX, TIMELINE_ZOOM_MIN, TIMELINE_ZOOM_STEP } from "@/lib/timelineZoom";
@@ -17,7 +18,7 @@ import { EditingActions } from "@/core/interactions";
 export const TimelineToolbar: React.FC = () => {
   const { zoomLevel, pixelsPerSecond, setZoom, swapClips, rippleEditEnabled, toggleRippleEdit, clipDragMode, setClipDragMode, snapEnabled, toggleSnapEnabled, tracks, normalizeTrack } = useTimelineStore();
   const { selectedClipIds, clearSelection } = useUIStore();
-  // const { snapToGrid, setSnapToGrid } = useSettingsStore();
+  const { autoRipple } = useSettingsStore();
   const { state: historyState, undo, redo } = useHistoryStore();
   const [splitMode, setSplitMode] = useState(false);
   // const [linkMode, setLinkMode] = useState(true);
@@ -161,7 +162,12 @@ export const TimelineToolbar: React.FC = () => {
       const clip = clips.find((c) => c.id === clipId);
       if (!clip) return;
       affectedTracks.add(clip.trackId);
-      execute(new RippleDeleteCommand(clipId));
+      // Use ripple delete if auto-ripple is enabled, otherwise regular delete
+      if (autoRipple) {
+        execute(new RippleDeleteCommand(clipId));
+      } else {
+        execute(new DeleteClipCommand(clipId));
+      }
     });
 
     commitTransaction();
