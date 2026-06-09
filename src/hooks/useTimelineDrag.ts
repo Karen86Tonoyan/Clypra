@@ -365,6 +365,30 @@ export function useTimelineDrag(containerRef: RefObject<HTMLDivElement | null>) 
       midpoints: new Float64Array(0),
     };
     const pointerX = clientX - cr.left + container.scrollLeft;
+
+    // If track is empty or cursor is after all clips, allow free positioning
+    if (trackMetrics.trackClips.length === 0) {
+      const next: DragState = {
+        ...ds,
+        offsetX,
+        offsetY,
+        isInvalidPosition: false,
+        targetTrackId,
+        insertionIndex: null,
+        gapStartTime: targetStartTime,
+        gapDuration: clip.duration,
+        targetStartTime,
+        willCreateNewTrack: false,
+        newTrackPosition: null,
+      };
+      const visualChanged = Math.abs((next.offsetX ?? 0) - (ds.offsetX ?? 0)) > DRAG_RENDER_EPSILON_PX || Math.abs((next.offsetY ?? 0) - (ds.offsetY ?? 0)) > DRAG_RENDER_EPSILON_PX;
+      const targetChanged = ds.targetTrackId !== next.targetTrackId || ds.targetStartTime !== next.targetStartTime || ds.insertionIndex !== next.insertionIndex || ds.isInvalidPosition !== next.isInvalidPosition || ds.willCreateNewTrack !== next.willCreateNewTrack || ds.newTrackPosition !== next.newTrackPosition;
+      dragStateRef.current = next;
+      if (visualChanged || targetChanged) setDragState(next);
+      return;
+    }
+
+    // Find insertion point between clips
     let lo = 0;
     let hi = trackMetrics.midpoints.length;
     while (lo < hi) {
@@ -374,6 +398,29 @@ export function useTimelineDrag(containerRef: RefObject<HTMLDivElement | null>) 
       else lo = mid + 1;
     }
     let insertionIndex = lo;
+
+    // If cursor is after all clips, allow free positioning at cursor location
+    if (insertionIndex >= trackMetrics.trackClips.length) {
+      const next: DragState = {
+        ...ds,
+        offsetX,
+        offsetY,
+        isInvalidPosition: false,
+        targetTrackId,
+        insertionIndex: null,
+        gapStartTime: targetStartTime,
+        gapDuration: clip.duration,
+        targetStartTime,
+        willCreateNewTrack: false,
+        newTrackPosition: null,
+      };
+      const visualChanged = Math.abs((next.offsetX ?? 0) - (ds.offsetX ?? 0)) > DRAG_RENDER_EPSILON_PX || Math.abs((next.offsetY ?? 0) - (ds.offsetY ?? 0)) > DRAG_RENDER_EPSILON_PX;
+      const targetChanged = ds.targetTrackId !== next.targetTrackId || ds.targetStartTime !== next.targetStartTime || ds.insertionIndex !== next.insertionIndex || ds.isInvalidPosition !== next.isInvalidPosition || ds.willCreateNewTrack !== next.willCreateNewTrack || ds.newTrackPosition !== next.newTrackPosition;
+      dragStateRef.current = next;
+      if (visualChanged || targetChanged) setDragState(next);
+      return;
+    }
+
     const boundaryMidpoint = trackMetrics.midpoints[Math.max(0, Math.min(trackMetrics.midpoints.length - 1, insertionIndex - 1))];
     if (Number.isFinite(boundaryMidpoint) && Math.abs(pointerX - boundaryMidpoint) <= BOUNDARY_SNAP_EPSILON_PX && ds.targetTrackId === targetTrackId && ds.insertionIndex !== null) {
       insertionIndex = ds.insertionIndex;
@@ -487,6 +534,8 @@ export function useTimelineDrag(containerRef: RefObject<HTMLDivElement | null>) 
       }
 
       const { pixelsPerSecond: livePps } = useTimelineStore.getState();
+
+      // Handle ripple mode with insertion index (between clips)
       if (dragSnapshot.targetTrackId && dragSnapshot.insertionIndex !== null) {
         const orderedDragged = [...dragSnapshot.draggedClipIds].sort((a, b) => {
           const pa = dragSnapshot.originalPlacements[a];
@@ -498,6 +547,27 @@ export function useTimelineDrag(containerRef: RefObject<HTMLDivElement | null>) 
         orderedDragged.forEach((id, i) => insertClipAtIndex(id, dragSnapshot.targetTrackId!, dragSnapshot.insertionIndex! + i));
         // Ripple mode: always normalize track to close gaps
         normalizeTrack(dragSnapshot.targetTrackId);
+        removeEmptyNonMainTracks(sourceTrackIds);
+        dragStateRef.current = null;
+        setDragState(null);
+        clearQueuedDragMove();
+        resumeAutoSave();
+        return;
+      }
+
+      // Handle free positioning (empty track or after all clips)
+      if (dragSnapshot.targetTrackId && dragSnapshot.targetStartTime !== null) {
+        withBatch(() => {
+          dragSnapshot.draggedClipIds.forEach((id) => {
+            const placement = dragSnapshot.originalPlacements[id];
+            if (!placement) return;
+            const relativeOffset = placement.startTime - (dragSnapshot.originalPlacements[dragSnapshot.draggingClipId ?? ""]?.startTime ?? 0);
+            updateClip(id, {
+              startTime: Math.max(0, dragSnapshot.targetStartTime! + relativeOffset),
+              trackId: dragSnapshot.targetTrackId!,
+            });
+          });
+        });
         removeEmptyNonMainTracks(sourceTrackIds);
         dragStateRef.current = null;
         setDragState(null);
