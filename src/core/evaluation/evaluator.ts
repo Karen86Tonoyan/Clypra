@@ -169,7 +169,10 @@ export function evaluateTimelineScene(time: number, clips: Clip[], tracks: Track
     const asset = assetMap.get(clip.mediaId);
     if (!asset || (asset.type !== "video" && asset.type !== "image")) continue;
 
-    const sourceTime = resolveClipSourceTime(clip, evalTime, { clampToRange: true }).sourceTime;
+    const sourceTime = resolveClipSourceTime(clip, evalTime, {
+      clampToRange: true,
+      frameRate: project?.frameRate ?? 30,
+    }).sourceTime;
     const sourcePath = asset.path ? convertFileSrc(asset.path) : asset.posterFrame || "";
     if (!sourcePath) continue;
 
@@ -216,7 +219,10 @@ export function evaluateTimelineScene(time: number, clips: Clip[], tracks: Track
     if (!hasAudio || !asset) continue;
     if (track?.muted ?? false) continue;
 
-    const sourceTime = resolveClipSourceTime(clip, evalTime, { clampToRange: true }).sourceTime;
+    const sourceTime = resolveClipSourceTime(clip, evalTime, {
+      clampToRange: true,
+      frameRate: project?.frameRate ?? 30,
+    }).sourceTime;
     const sourcePath = asset.path ? convertFileSrc(asset.path) : "";
     if (!sourcePath) continue;
 

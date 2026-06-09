@@ -32,13 +32,7 @@ export const MediaCard: React.FC<MediaCardProps> = ({ asset, isSelected, isUsedI
 
   const handleClick = () => {
     onClick(); // Keep selection state
-    previewAsset(asset); // Switch to source preview
-
-    // Switch transport authority to source context
-    import("@/core/runtime/ProjectSession").then(({ getActiveSessionOrNull }) => {
-      const session = getActiveSessionOrNull();
-      session?.transportAuthority?.setActiveContext("source");
-    });
+    previewAsset(asset); // Switch to source preview + auto-pause program
   };
 
   return (

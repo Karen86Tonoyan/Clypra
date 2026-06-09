@@ -127,7 +127,7 @@ export async function exportVideo(config: VideoExportConfig): Promise<VideoExpor
   const totalFrames = Math.round((endTime - startTime) * frameRate);
   const frameTimes: number[] = [];
   for (let i = 0; i < totalFrames; i++) {
-    frameTimes.push(startTime + (i / frameRate));
+    frameTimes.push(startTime + i / frameRate);
   }
 
   if (totalFrames === 0) {
@@ -222,7 +222,12 @@ export async function exportVideo(config: VideoExportConfig): Promise<VideoExpor
         // Calculate source time (accounting for trim)
         const clipLocalTime = time - clip.startTime;
         const trimIn = clip.trimIn || 0;
-        const sourceTime = trimIn + clipLocalTime;
+        const trimOut = clip.trimOut ?? trimIn + clip.duration;
+        const rawSourceTime = trimIn + clipLocalTime;
+
+        // ✅ CLAMP: never seek past the clip's valid range
+        const frameTime = 1 / frameRate;
+        const sourceTime = Math.min(rawSourceTime, trimOut - frameTime);
 
         // Resolve path for Tauri webview context
         const resolvedPath = asset.path.startsWith("asset://") ? asset.path : convertFileSrc(asset.path);

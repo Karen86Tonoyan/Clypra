@@ -2,6 +2,7 @@ import React, { useRef, useState, useEffect, useCallback } from "react";
 import { Plus, X, RotateCcw, Play } from "lucide-react";
 import { convertFileSrc } from "@tauri-apps/api/core";
 import { useUIStore } from "@/store/uiStore";
+import { usePreviewMode } from "@/hooks/usePreviewMode";
 import { getInsertIndexForNewTrack, useTimelineStore } from "@/store/timelineStore";
 import { useProjectStore } from "@/store/projectStore";
 import { createClipFromAsset } from "@/lib/timelineClip";
@@ -23,7 +24,8 @@ import { useEffectsStore } from "@/features/text-effects/store/effectsStore";
 const USE_GPU_PREVIEW = false;
 
 export const SourcePreview: React.FC = () => {
-  const { sourceAsset, sourceTextPreset, sourceInPoint, sourceOutPoint, exitSourceMode, markSourceIn, markSourceOut } = useUIStore();
+  const { sourceAsset, sourceTextPreset, sourceInPoint, sourceOutPoint, markSourceIn, markSourceOut } = useUIStore();
+  const { exitSourceMode } = usePreviewMode();
   const { tracks, clips, addClip, addTrack, insertTrackAt, getTimelineEndTime } = useTimelineStore();
   const { project, updateProject } = useProjectStore();
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -235,10 +237,8 @@ export const SourcePreview: React.FC = () => {
       });
 
       addClip(textClip);
-      exitSourceMode();
+      exitSourceMode(); // Auto-switches transport context
 
-      const session = getActiveSessionOrNull();
-      session?.transportAuthority?.setActiveContext("program");
       return;
     }
 
@@ -285,11 +285,7 @@ export const SourcePreview: React.FC = () => {
     newClip.duration = trimOut - trimIn;
 
     addClip(newClip);
-    exitSourceMode();
-
-    // Switch transport authority back to program context
-    const session = getActiveSessionOrNull();
-    session?.transportAuthority?.setActiveContext("program");
+    exitSourceMode(); // Auto-switches transport context
   };
 
   /** Format time as HH:MM:SS:FF (frame-accurate) */
@@ -319,9 +315,7 @@ export const SourcePreview: React.FC = () => {
         </div>
         <button
           onClick={() => {
-            exitSourceMode();
-            const session = getActiveSessionOrNull();
-            session?.transportAuthority?.setActiveContext("program");
+            exitSourceMode(); // Auto-switches transport context
           }}
           className="w-7 h-7 flex items-center justify-center rounded hover:bg-white/6 transition-colors text-text-muted hover:text-text-primary"
           title="Close (Esc)"

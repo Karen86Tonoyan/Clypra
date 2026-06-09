@@ -12,7 +12,7 @@ import { useProjectStore } from "@/store/projectStore";
 import { useUIStore } from "@/store/uiStore";
 import { useTimelineStore } from "@/store/timelineStore";
 import { useHistoryStore } from "@/store/historyStore";
-import { DeleteClipCommand } from "@/core/history/commands/DeleteClipCommand";
+import { RippleDeleteCommand } from "@/core/history/commands/RippleDeleteCommand";
 import type { VideoMetadata } from "@/types";
 import type { MediaTabProps } from "./types";
 import { generateId } from "@/lib/id";
@@ -152,7 +152,7 @@ export const MediaTab: React.FC<MediaTabProps> = ({ onAddToTimeline }) => {
                     // Remove all clips using this asset
                     clipsToRemove.forEach((clip) => {
                       affectedTracks.add(clip.trackId);
-                      execute(new DeleteClipCommand(clip.id));
+                      execute(new RippleDeleteCommand(clip.id));
                     });
 
                     commitTransaction();

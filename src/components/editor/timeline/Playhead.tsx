@@ -1,6 +1,8 @@
 import React, { useRef, useEffect, useState, RefObject } from "react";
 import { usePlaybackClock, usePlaybackControls } from "@/hooks/usePlaybackClock";
 import { useTimelineStore } from "@/store/timelineStore";
+import { useProjectStore } from "@/store/projectStore";
+import { snapToFrameBoundary } from "@/lib/frameTime";
 
 interface PlayheadProps {
   pixelsPerSecond: number;
@@ -66,8 +68,16 @@ export const Playhead: React.FC<PlayheadProps> = ({ pixelsPerSecond, duration, c
       const scrollX = container.scrollLeft;
       const playheadX = scrollX + pointerXRef.current + dragOffsetRef.current;
 
-      // Convert to time and seek
-      const newTime = Math.max(0, Math.min(playheadX / pixelsPerSecond, duration));
+      // Convert to time and snap to frame boundary
+      const rawTime = playheadX / pixelsPerSecond;
+      // Get frameRate from project store directly, not clock state
+      const frameRate = useProjectStore.getState().project?.frameRate ?? 30;
+
+      // Only snap if frames are visually distinguishable (> 3px apart)
+      // Prevents "sticky" playhead at extreme zoom-out levels
+      const pixelsPerFrame = pixelsPerSecond / frameRate;
+      const snappedTime = pixelsPerFrame > 3 ? snapToFrameBoundary(rawTime, frameRate) : rawTime;
+      const newTime = Math.max(0, Math.min(snappedTime, duration));
       seek(newTime);
 
       rafRef.current = requestAnimationFrame(tick);
@@ -216,7 +226,13 @@ export const Playhead: React.FC<PlayheadProps> = ({ pixelsPerSecond, duration, c
 
     // Seek to clicked position (with offset)
     const playheadX = scrollX + pointerX + dragOffsetRef.current;
-    const newTime = Math.max(0, Math.min(playheadX / pixelsPerSecond, duration));
+    const rawTime = playheadX / pixelsPerSecond;
+    const frameRate = useProjectStore.getState().project?.frameRate ?? 30;
+
+    // Only snap if frames are visually distinguishable (> 3px apart)
+    const pixelsPerFrame = pixelsPerSecond / frameRate;
+    const snappedTime = pixelsPerFrame > 3 ? snapToFrameBoundary(rawTime, frameRate) : rawTime;
+    const newTime = Math.max(0, Math.min(snappedTime, duration));
     seek(newTime);
 
     setIsDragging(true);

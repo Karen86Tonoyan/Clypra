@@ -2,7 +2,8 @@ import React, { useRef, useEffect, useCallback } from "react";
 import { useTimelineStore } from "@/store/timelineStore";
 import { useUIStore } from "@/store/uiStore";
 import { useHistoryStore } from "@/store/historyStore";
-import { DeleteClipCommand } from "@/core/history/commands/DeleteClipCommand";
+import { RippleDeleteCommand } from "@/core/history/commands/RippleDeleteCommand";
+import { usePreviewMode } from "@/hooks/usePreviewMode";
 import { usePlayback } from "@/hooks/usePlayback";
 import { getTimelineViewportEnd } from "@/lib/timelineClip";
 import { getActiveSessionOrNull } from "@/core/runtime/ProjectSession";
@@ -26,7 +27,8 @@ const traceSelect = (...args: unknown[]) => {
 export const Timeline: React.FC = () => {
   const { tracks, clips, pixelsPerSecond, scrollLeft, setScrollLeft, getTimelineEndTime, setViewportWidth } = useTimelineStore();
 
-  const { previewMode, exitSourceMode, clearSelection } = useUIStore();
+  const { previewMode, clearSelection } = useUIStore();
+  const { exitSourceMode } = usePreviewMode();
   const { currentTime, duration, isPlaying, seek, setDuration } = usePlayback();
   const containerRef = useRef<HTMLDivElement>(null);
   const runtime = useRenderRuntime();
@@ -144,7 +146,7 @@ export const Timeline: React.FC = () => {
         const clip = store.clips.find((c) => c.id === clipId);
         if (clip) {
           affectedTracks.add(clip.trackId);
-          execute(new DeleteClipCommand(clipId));
+          execute(new RippleDeleteCommand(clipId));
         }
       });
 
@@ -190,8 +192,7 @@ export const Timeline: React.FC = () => {
       clearSelection();
 
       if (previewMode === "source") {
-        exitSourceMode();
-        getActiveSessionOrNull()?.transportAuthority?.setActiveContext("program");
+        exitSourceMode(); // Auto-switches transport context
       }
 
       const container = containerRef.current;

@@ -7,7 +7,7 @@ import { useUIStore } from "@/store/uiStore";
 import { generateId } from "@/lib/id";
 // import { useSettingsStore } from "@/store/settingsStore";
 import { useHistoryStore } from "@/store/historyStore";
-import { DeleteClipCommand } from "@/core/history/commands/DeleteClipCommand";
+import { RippleDeleteCommand } from "@/core/history/commands/RippleDeleteCommand";
 import { SuccessToast } from "@/components/ui/SuccessToast";
 import { DEFAULT_SRP_CONFIG, SpatialTier } from "@/lib/renderEngine/types";
 import { clampTimelineZoom, formatCadenceSeconds, getSrpTierForZoom, getTimelineTemporalDetail, getZoomFromRatio, getZoomRatio, snapTimelineZoomToTierAnchors, TIMELINE_TIER_LABELS, TIMELINE_ZOOM_MAX, TIMELINE_ZOOM_MIN, TIMELINE_ZOOM_STEP } from "@/lib/timelineZoom";
@@ -161,7 +161,7 @@ export const TimelineToolbar: React.FC = () => {
       const clip = clips.find((c) => c.id === clipId);
       if (!clip) return;
       affectedTracks.add(clip.trackId);
-      execute(new DeleteClipCommand(clipId));
+      execute(new RippleDeleteCommand(clipId));
     });
 
     commitTransaction();

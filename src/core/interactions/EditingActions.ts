@@ -22,6 +22,7 @@
 
 import { useHistoryStore } from "@/store/historyStore";
 import { useTimelineStore } from "@/store/timelineStore";
+import { useProjectStore } from "@/store/projectStore";
 import { getPlaybackClock } from "@/hooks/usePlaybackClock";
 import { useUIStore } from "@/store/uiStore";
 import { SplitClipCommand, UpdateClipCommand } from "../history/commands";
@@ -104,8 +105,11 @@ export class EditingActions {
       };
     }
 
+    // Get frameRate from project store at call site
+    const frameRate = useProjectStore.getState().project?.frameRate ?? 30;
+
     // Create and execute command
-    const command = new SplitClipCommand(clipId, time, clip);
+    const command = new SplitClipCommand(clipId, time, frameRate, clip);
 
     try {
       useHistoryStore.getState().execute(command);
@@ -260,11 +264,15 @@ export class EditingActions {
           };
 
           history.execute(
-            new UpdateClipCommand(clip.id, {
-              startTime: clip.startTime,
-              trimIn: clip.trimIn,
-              duration: clip.duration,
-            }, newProperties),
+            new UpdateClipCommand(
+              clip.id,
+              {
+                startTime: clip.startTime,
+                trimIn: clip.trimIn,
+                duration: clip.duration,
+              },
+              newProperties,
+            ),
           );
         } else {
           const newTrimOut = clip.trimIn + (currentTime - clip.startTime);
@@ -275,10 +283,14 @@ export class EditingActions {
           };
 
           history.execute(
-            new UpdateClipCommand(clip.id, {
-              trimOut: clip.trimOut,
-              duration: clip.duration,
-            }, newProperties),
+            new UpdateClipCommand(
+              clip.id,
+              {
+                trimOut: clip.trimOut,
+                duration: clip.duration,
+              },
+              newProperties,
+            ),
           );
         }
 

@@ -176,7 +176,7 @@ describe("timelineStore clip operations", () => {
       addClip(clip);
 
       // Use command system instead of direct method
-      const command = new SplitClipCommand("clip-1", 4, clip);
+      const command = new SplitClipCommand("clip-1", 4, 30, clip);
       execute(command);
 
       const { clips } = useTimelineStore.getState();
@@ -225,7 +225,7 @@ describe("timelineStore clip operations", () => {
       addClip(clip);
 
       // Use command system instead of direct method
-      const command = new SplitClipCommand("clip-1", 3, clip);
+      const command = new SplitClipCommand("clip-1", 3, 30, clip);
       execute(command);
 
       const { clips } = useTimelineStore.getState();

@@ -250,14 +250,16 @@ export const useTimelineStore = create<TimelineStore>(
       set((state) => {
         const wasEmpty = state.clips.length === 0;
 
-        // If timeline was empty, switch to program preview and seek to zero
+        // If timeline was empty, switch to program preview and seek to first clip's start time
         if (wasEmpty) {
           // Import dynamically to avoid circular dependency
           import("@/core/runtime/ProjectSession").then(({ getActiveSessionOrNull }) => {
             const session = getActiveSessionOrNull();
             if (session?.transportAuthority) {
               session.transportAuthority.setActiveContext("program");
-              session.transportAuthority.seek(0);
+              // Seek to the new clip's start time for immediate visual feedback
+              const firstClipStartTime = clip.startTime;
+              session.transportAuthority.seek(firstClipStartTime);
             }
           });
 

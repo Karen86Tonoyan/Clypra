@@ -8,6 +8,7 @@ import type { Command } from "../Command";
 import { generateCommandId } from "../Command";
 import type { Clip } from "@/types";
 import { generateId } from "@/lib/id";
+import { snapToFrameBoundary } from "@/lib/frameTime";
 
 interface TimelineState {
   clips: Clip[];
@@ -25,6 +26,7 @@ export class SplitClipCommand implements Command {
   constructor(
     private readonly clipId: string,
     private readonly splitTime: number,
+    private readonly frameRate: number,
     private readonly originalClip: Clip,
   ) {
     this.id = generateCommandId();
@@ -41,7 +43,10 @@ export class SplitClipCommand implements Command {
       return state;
     }
 
-    const timeSinceStart = this.splitTime - clip.startTime;
+    // ✅ SNAP split time to frame boundary BEFORE calculations
+    const snappedSplitTime = snapToFrameBoundary(this.splitTime, this.frameRate);
+
+    const timeSinceStart = snappedSplitTime - clip.startTime;
 
     // Calculate new trim points and durations
     const leftTrimOut = clip.trimIn + timeSinceStart;
@@ -49,6 +54,9 @@ export class SplitClipCommand implements Command {
 
     const rightTrimIn = leftTrimOut;
     const rightDuration = clip.trimOut - rightTrimIn;
+
+    // ✅ ASSERT: verify coherence (can remove in production)
+    console.assert(Math.abs(rightTrimIn - leftTrimOut) < 0.001, `Split coherence violated: leftTrimOut=${leftTrimOut} rightTrimIn=${rightTrimIn}`);
 
     // Generate new clip ID if not already done
     if (!this.newClipId) {
@@ -58,7 +66,7 @@ export class SplitClipCommand implements Command {
     const newClip: Clip = {
       ...clip,
       id: this.newClipId,
-      startTime: this.splitTime,
+      startTime: snappedSplitTime, // ✅ Use snapped time
       duration: rightDuration,
       trimIn: rightTrimIn,
       trimOut: clip.trimOut,
@@ -89,13 +97,14 @@ export class SplitClipCommand implements Command {
       type: "SplitClip",
       clipId: this.clipId,
       splitTime: this.splitTime,
+      frameRate: this.frameRate,
       originalClip: this.originalClip,
       newClipId: this.newClipId,
     };
   }
 
   static fromJSON(data: Record<string, any>): SplitClipCommand {
-    const cmd = new SplitClipCommand(data.clipId, data.splitTime, data.originalClip);
+    const cmd = new SplitClipCommand(data.clipId, data.splitTime, data.frameRate || 30, data.originalClip);
     cmd.newClipId = data.newClipId;
     return cmd;
   }
@@ -116,6 +125,7 @@ class MergeSplitClipsCommand implements Command {
     private readonly leftClipId: string,
     private readonly rightClipId: string,
     private readonly originalClip: Clip,
+    private readonly frameRate: number = 30,
   ) {
     this.id = generateCommandId();
     this.label = "Merge Split Clips";
@@ -140,7 +150,7 @@ class MergeSplitClipsCommand implements Command {
   invert(): Command {
     const rightClip = this.originalClip;
     const splitTime = this.originalClip.startTime + this.originalClip.duration / 2; // Approximate
-    return new SplitClipCommand(this.leftClipId, splitTime, this.originalClip);
+    return new SplitClipCommand(this.leftClipId, splitTime, this.frameRate, this.originalClip);
   }
 
   toJSON(): Record<string, any> {
