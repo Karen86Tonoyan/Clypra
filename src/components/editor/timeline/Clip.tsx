@@ -494,8 +494,16 @@ const ClipInner: React.FC<ClipProps> = ({ clip, mediaAsset, pixelsPerSecond, sel
         return "bg-[#ea580c] text-white"; // Orange for titles/effects
       }
     }
-    if (mediaAsset?.type === "audio") return "bg-timeline-clip-audio border-timeline-clip-audio-border";
-    return "h-full bg-accent";
+    // Audio, video, and image clips use CSS variable colors (applied via style prop)
+    return "";
+  };
+
+  const getClipBackgroundStyle = () => {
+    if (isClipText) return {}; // Text clips use className colors
+    if (isClipAudio) return { backgroundColor: "var(--color-timeline-clip-audio)" };
+    if (isClipVideo) return { backgroundColor: "var(--color-timeline-clip-video)" };
+    if (isClipImage) return { backgroundColor: "var(--color-timeline-clip-video)" };
+    return { backgroundColor: "var(--color-accent)" }; // Fallback
   };
 
   return (
@@ -529,6 +537,7 @@ const ClipInner: React.FC<ClipProps> = ({ clip, mediaAsset, pixelsPerSecond, sel
         transformOrigin: isDragging ? "0 0" : undefined,
         transform: isDragging ? `translateY(${dragState?.offsetY ?? 0}px)` : "none",
         border: isInvalidPosition ? "2px solid var(--color-timeline-clip-invalid)" : undefined,
+        ...getClipBackgroundStyle(),
       }}
     >
       {/* Left trim handle */}
