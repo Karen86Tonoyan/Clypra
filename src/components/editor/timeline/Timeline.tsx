@@ -5,6 +5,7 @@ import { useHistoryStore } from "@/store/historyStore";
 import { useSettingsStore } from "@/store/settingsStore";
 import { RippleDeleteCommand } from "@/core/history/commands/RippleDeleteCommand";
 import { DeleteClipCommand } from "@/core/history/commands/DeleteClipCommand";
+import { GapManager } from "@/lib/gapManager";
 import { usePreviewMode } from "@/hooks/usePreviewMode";
 import { usePlayback } from "@/hooks/usePlayback";
 import { getTimelineViewportEnd } from "@/lib/timelineClip";
@@ -147,7 +148,7 @@ export const Timeline: React.FC = () => {
           e.preventDefault();
           const gap = store.gaps.find((g) => g.id === selectedGapId);
           if (gap && !gap.protected) {
-            store.removeGap(selectedGapId);
+            GapManager.removeGap(selectedGapId);
             uiState.clearSelection();
           }
           return;
@@ -196,7 +197,7 @@ export const Timeline: React.FC = () => {
 
         // Insert 2-second gap at playhead position
         const gapDuration = 2.0;
-        store.insertGap(trackId, currentTime, gapDuration);
+        GapManager.insertGap(trackId, currentTime, gapDuration);
         return;
       }
 
@@ -210,7 +211,7 @@ export const Timeline: React.FC = () => {
         if (selectedGapId) {
           const gap = store.gaps.find((g) => g.id === selectedGapId);
           if (gap && !gap.protected) {
-            store.removeGap(selectedGapId);
+            GapManager.removeGap(selectedGapId);
             uiState.clearSelection();
           }
           return;
@@ -220,14 +221,10 @@ export const Timeline: React.FC = () => {
         const trackId = selectedTrackId || tracks[0]?.id;
         if (!trackId) return;
 
-        const trackGaps = store.gaps.filter((g) => g.trackId === trackId);
-        const gapAtPlayhead = trackGaps.find((g) => {
-          const gapEnd = g.startTime + g.duration;
-          return currentTime >= g.startTime && currentTime <= gapEnd;
-        });
+        const gapAtPlayhead = GapManager.getGapAtPosition(trackId, currentTime);
 
         if (gapAtPlayhead && !gapAtPlayhead.protected) {
-          store.removeGap(gapAtPlayhead.id);
+          GapManager.removeGap(gapAtPlayhead.id);
         }
         return;
       }

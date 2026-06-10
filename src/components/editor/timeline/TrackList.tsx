@@ -2,6 +2,7 @@ import React from "react";
 import { Volume2, VolumeX, Lock, Unlock, Eye, EyeOff, Minimize2 } from "lucide-react";
 import { useTimelineStore } from "@/store/timelineStore";
 import { useUIStore } from "@/store/uiStore";
+import { GapManager } from "@/lib/gapManager";
 import type { Track } from "@/types";
 
 interface TrackListProps {
@@ -9,7 +10,7 @@ interface TrackListProps {
 }
 
 export const TrackList: React.FC<TrackListProps> = ({ onEditTrack }) => {
-  const { tracks, clips, gaps, toggleTrackLock, toggleTrackMute, toggleTrackVisibility, packTrackGaps } = useTimelineStore();
+  const { tracks, clips, gaps, toggleTrackLock, toggleTrackMute, toggleTrackVisibility } = useTimelineStore();
   const { selectedTrackId, selectTrack } = useUIStore();
 
   // Helper: Check if track has clips
@@ -91,7 +92,7 @@ export const TrackList: React.FC<TrackListProps> = ({ onEditTrack }) => {
                   <button
                     onClick={(e) => {
                       e.stopPropagation();
-                      packTrackGaps(track.id);
+                      GapManager.packTrack(track.id);
                     }}
                     className="p-1 rounded transition-colors cursor-pointer hover:bg-timeline-button-hover text-timeline-button-icon opacity-0 group-hover:opacity-100"
                     aria-label="Pack track (remove gaps)"

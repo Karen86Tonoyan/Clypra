@@ -1,7 +1,7 @@
 import React, { useState, useRef } from "react";
 import { Lock, Trash2 } from "lucide-react";
 import { useUIStore } from "@/store/uiStore";
-import { useTimelineStore } from "@/store/timelineStore";
+import { GapManager } from "@/lib/gapManager";
 import type { Gap } from "@/types/gap";
 
 interface GapIndicatorProps {
@@ -24,7 +24,6 @@ interface GapIndicatorProps {
  */
 export const GapIndicator: React.FC<GapIndicatorProps> = ({ gap, pixelsPerSecond, selected = false, locked = false }) => {
   const { selectGap } = useUIStore();
-  const { removeGap, toggleGapProtection } = useTimelineStore();
   const [isHovered, setIsHovered] = useState(false);
   const [showContextMenu, setShowContextMenu] = useState(false);
   const [contextMenuPos, setContextMenuPos] = useState({ x: 0, y: 0 });
@@ -57,7 +56,7 @@ export const GapIndicator: React.FC<GapIndicatorProps> = ({ gap, pixelsPerSecond
     e.stopPropagation();
     if (!locked && !gap.protected) {
       // Double-click to remove gap (ripple delete)
-      removeGap(gap.id);
+      GapManager.removeGap(gap.id);
     }
   };
 
@@ -71,12 +70,12 @@ export const GapIndicator: React.FC<GapIndicatorProps> = ({ gap, pixelsPerSecond
   };
 
   const handleRemove = () => {
-    removeGap(gap.id);
+    GapManager.removeGap(gap.id);
     setShowContextMenu(false);
   };
 
   const handleToggleProtection = () => {
-    toggleGapProtection(gap.id);
+    GapManager.toggleProtection(gap.id);
     setShowContextMenu(false);
   };
 

@@ -878,8 +878,16 @@ export const useTimelineStore = create<TimelineStore>(
     // ═══════════════════════════════════════════════════════════
     // Gap Operations (First-Class Gap Entities)
     // ═══════════════════════════════════════════════════════════
+    // GAP OPERATIONS
+    // ⚠️ DEPRECATED: These methods are kept for backwards compatibility only.
+    // Use GapManager for new code to get undo/redo support:
+    //   import { GapManager } from '@/lib/gapManager';
+    //   GapManager.insertGap(trackId, startTime, duration);
+    // ═══════════════════════════════════════════════════════════
 
     insertGap: (trackId, startTime, duration) => {
+      console.warn("[DEPRECATED] timelineStore.insertGap() - Use GapManager.insertGap() for undo/redo support");
+
       const state = get();
       const track = state.tracks.find((t) => t.id === trackId);
 
@@ -913,6 +921,8 @@ export const useTimelineStore = create<TimelineStore>(
     },
 
     removeGap: (gapId) => {
+      console.warn("[DEPRECATED] timelineStore.removeGap() - Use GapManager.removeGap() for undo/redo support");
+
       const state = get();
       const gap = state.gaps.find((g) => g.id === gapId);
 
@@ -943,6 +953,8 @@ export const useTimelineStore = create<TimelineStore>(
     },
 
     resizeGapDuration: (gapId, newDuration) => {
+      console.warn("[DEPRECATED] timelineStore.resizeGapDuration() - Use GapManager.resizeGap() for undo/redo support");
+
       const state = get();
       const gap = state.gaps.find((g) => g.id === gapId);
 
@@ -975,6 +987,8 @@ export const useTimelineStore = create<TimelineStore>(
     },
 
     toggleGapProtection: (gapId) => {
+      console.warn("[DEPRECATED] timelineStore.toggleGapProtection() - Use GapManager.toggleProtection() for undo/redo support");
+
       set((state) => {
         const next: Partial<TimelineStore> = {
           gaps: state.gaps.map((g) =>
@@ -1021,6 +1035,8 @@ export const useTimelineStore = create<TimelineStore>(
     },
 
     packTrackGaps: (trackId) => {
+      console.warn("[DEPRECATED] timelineStore.packTrackGaps() - Use GapManager.packTrack() for undo/redo support");
+
       const state = get();
       const track = state.tracks.find((t) => t.id === trackId);
 
