@@ -55,7 +55,11 @@ class GapManagerImpl {
 
     execute(command);
 
-    return command.insertedGap ?? null;
+    // Get the inserted gap from the store (it's the one at the specified position)
+    const timelineStore = useTimelineStore.getState();
+    const insertedGap = timelineStore.gaps.find((g) => g.trackId === trackId && g.startTime === startTime && g.duration === duration);
+
+    return insertedGap ?? null;
   }
 
   /**

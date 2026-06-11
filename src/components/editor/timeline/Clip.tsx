@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from "react";
 import { useUIStore } from "@/store/uiStore";
 import { useTimelineStore } from "@/store/timelineStore";
-import { usePlayback } from "@/hooks/usePlayback";
+import { usePlaybackClock } from "@/hooks/usePlaybackClock";
 import type { Clip as ClipType, MediaAsset } from "@/types";
 import { ClipFilmstrip } from "./ClipFilmstrip";
 import { TimelineWaveform } from "./TimelineWaveform";
@@ -36,7 +36,8 @@ interface ClipProps {
 const ClipInner: React.FC<ClipProps> = ({ clip, mediaAsset, pixelsPerSecond, selected, locked = false, onDragStart, onDragMove, onDragEnd, dragState }) => {
   const { selectClip, toggleClipSelection } = useUIStore();
   const { clips, updateClip, rippleEditEnabled, rippleTrimClip, scrollLeft, viewportWidth, snapEnabled, setSnapGuides, clearSnapGuides } = useTimelineStore();
-  const { currentTime } = usePlayback();
+  const clockState = usePlaybackClock();
+  const currentTime = clockState.time;
   const [isResizing, setIsResizing] = useState<"left" | "right" | null>(null);
   const [isHovered, setIsHovered] = useState(false);
   const [resizeStart, setResizeStart] = useState<{ x: number; startTime: number; duration: number; trimIn: number; trimOut: number; isRipple: boolean } | null>(null);
@@ -579,7 +580,7 @@ const ClipInner: React.FC<ClipProps> = ({ clip, mediaAsset, pixelsPerSecond, sel
           traceResize("left-handle mousedown", { clipId: clip.id, clientX: e.clientX, clientY: e.clientY, button: e.button });
           handleResizeStartMouse(e, "left");
         }}
-        title={rippleEditEnabled ? "Ripple trim (ripple mode ON)" : "Hold Shift for ripple trim"}
+        title={rippleEditEnabled ? "Ripple trim (Shift to disable)" : "Normal trim (Shift for ripple)"}
       >
         <div className="absolute left-[5px] top-1/2 h-[70%] w-[2px] -translate-y-1/2 rounded bg-white/90" />
       </div>
@@ -648,7 +649,7 @@ const ClipInner: React.FC<ClipProps> = ({ clip, mediaAsset, pixelsPerSecond, sel
           traceResize("right-handle mousedown", { clipId: clip.id, clientX: e.clientX, clientY: e.clientY, button: e.button });
           handleResizeStartMouse(e, "right");
         }}
-        title={rippleEditEnabled ? "Ripple trim (ripple mode ON)" : "Hold Shift for ripple trim"}
+        title={rippleEditEnabled ? "Ripple trim (Shift to disable)" : "Normal trim (Shift for ripple)"}
       >
         <div className="absolute right-[5px] top-1/2 h-[70%] w-[2px] -translate-y-1/2 rounded bg-white/90" />
       </div>

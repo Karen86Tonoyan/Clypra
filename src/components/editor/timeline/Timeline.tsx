@@ -2,14 +2,12 @@ import React, { useRef, useEffect, useCallback } from "react";
 import { useTimelineStore } from "@/store/timelineStore";
 import { useUIStore } from "@/store/uiStore";
 import { useHistoryStore } from "@/store/historyStore";
-import { useSettingsStore } from "@/store/settingsStore";
 import { RippleDeleteCommand } from "@/core/history/commands/RippleDeleteCommand";
 import { DeleteClipCommand } from "@/core/history/commands/DeleteClipCommand";
 import { GapManager } from "@/lib/gapManager";
 import { usePreviewMode } from "@/hooks/usePreviewMode";
-import { usePlayback } from "@/hooks/usePlayback";
+import { usePlaybackClock, usePlaybackControls } from "@/hooks/usePlaybackClock";
 import { getTimelineViewportEnd } from "@/lib/timelineClip";
-import { getActiveSessionOrNull } from "@/core/runtime/ProjectSession";
 import { useTimelineDrag } from "@/hooks/useTimelineDrag";
 import { useTimelineTauriDrop } from "@/hooks/useTimelineTauriDrop";
 import { useTimelineZoom } from "@/hooks/useTimelineZoom";
@@ -32,7 +30,11 @@ export const Timeline: React.FC = () => {
 
   const { previewMode, clearSelection } = useUIStore();
   const { exitSourceMode } = usePreviewMode();
-  const { currentTime, duration, isPlaying, seek, setDuration } = usePlayback();
+  const clockState = usePlaybackClock();
+  const { seek, setDuration } = usePlaybackControls();
+  const currentTime = clockState.time;
+  const duration = clockState.duration;
+  const isPlaying = clockState.state === "playing";
   const containerRef = useRef<HTMLDivElement>(null);
   const runtime = useRenderRuntime();
 
@@ -137,7 +139,7 @@ export const Timeline: React.FC = () => {
       const uiState = useUIStore.getState();
       const store = useTimelineStore.getState();
       const { execute, beginTransaction, commitTransaction } = useHistoryStore.getState();
-      const { autoRipple } = useSettingsStore.getState();
+      const rippleEnabled = store.rippleEditEnabled;
 
       // Delete/Backspace: Remove selected clips or gaps
       if (e.key === "Delete" || e.key === "Backspace") {
@@ -167,8 +169,8 @@ export const Timeline: React.FC = () => {
           const clip = store.clips.find((c) => c.id === clipId);
           if (clip) {
             affectedTracks.add(clip.trackId);
-            // Use ripple delete if auto-ripple is enabled, otherwise regular delete
-            if (autoRipple) {
+            // Use ripple delete if ripple mode is enabled, otherwise regular delete
+            if (rippleEnabled) {
               execute(new RippleDeleteCommand(clipId));
             } else {
               execute(new DeleteClipCommand(clipId));
@@ -283,13 +285,13 @@ export const Timeline: React.FC = () => {
   };
 
   return (
-    <div className="h-60 md:h-80 flex flex-col select-none bg-[#141920] relative">
+    <div className="h-60 md:h-80 flex flex-col select-none relative" style={{ backgroundColor: "var(--color-timeline-bg)" }}>
       <TimelineToolbar />
 
       <div className="flex-1 flex overflow-hidden">
         {clips.length > 0 && <TrackList />}
 
-        <div ref={containerRef} onScroll={handleScroll} onPointerDownCapture={handleTimelinePointerDownCapture} onClick={seekFromPointer} id="timeline-tracks-container" className={`flex-1 overflow-x-auto overflow-y-auto scrollbar-thin px-1 relative transition-colors border-l border-[#2b3442] ${isDraggingOver ? "bg-cyan-500/10 ring-2 ring-cyan-500/50 ring-inset" : ""}`}>
+        <div ref={containerRef} onScroll={handleScroll} onPointerDownCapture={handleTimelinePointerDownCapture} onClick={seekFromPointer} id="timeline-tracks-container" className={`flex-1 overflow-x-auto overflow-y-auto scrollbar-thin px-1 relative transition-colors ${isDraggingOver ? "bg-cyan-500/10 ring-2 ring-cyan-500/50 ring-inset" : ""}`} style={{ borderLeft: "1px solid var(--color-timeline-track-border)" }}>
           {clips.length === 0 && <div className="absolute top-1/2 left-3 text-xl text-white pointer-events-none font-mono">Drop media here • I to import</div>}
 
           <div
@@ -312,8 +314,8 @@ export const Timeline: React.FC = () => {
                       style={{
                         top: 0,
                         height: "2px",
-                        background: "#3b82f6",
-                        boxShadow: "0 0 8px rgba(59, 130, 246, 0.6)",
+                        background: "var(--color-timeline-drop-indicator)",
+                        boxShadow: "0 0 8px var(--color-timeline-drop-indicator)",
                       }}
                     />
                   )}
@@ -356,15 +358,14 @@ export const Timeline: React.FC = () => {
                           <div
                             className="absolute inset-0"
                             style={{
-                              background: "linear-gradient(90deg, transparent, #3b82f6 10%, #3b82f6 90%, transparent)",
-                              boxShadow: "0 0 12px rgba(59, 130, 246, 0.8)",
+                              background: `linear-gradient(90deg, transparent, var(--color-timeline-drop-indicator) 10%, var(--color-timeline-drop-indicator) 90%, transparent)`,
+                              boxShadow: "0 0 12px var(--color-timeline-drop-indicator)",
                             }}
                           />
                           <div
-                            className="relative text-xs font-medium px-3 py-1 rounded-full"
+                            className="relative text-xs font-medium px-3 py-1 rounded-full text-white"
                             style={{
-                              background: "rgba(59, 130, 246, 0.9)",
-                              color: "white",
+                              background: "var(--color-timeline-drop-indicator)",
                               boxShadow: "0 2px 8px rgba(0, 0, 0, 0.3)",
                             }}
                           >
@@ -381,8 +382,8 @@ export const Timeline: React.FC = () => {
                       style={{
                         bottom: 0,
                         height: "2px",
-                        background: "#3b82f6",
-                        boxShadow: "0 0 8px rgba(59, 130, 246, 0.6)",
+                        background: "var(--color-timeline-drop-indicator)",
+                        boxShadow: "0 0 8px var(--color-timeline-drop-indicator)",
                       }}
                     />
                   )}
@@ -392,7 +393,7 @@ export const Timeline: React.FC = () => {
                   {/* Snap Guides - Vertical alignment indicators */}
                   {snapGuides.map((guide, index) => {
                     const guideLeft = guide.time * pixelsPerSecond;
-                    const guideColor = guide.type === "playhead" ? "#3b82f6" : "#10b981"; // Blue for playhead, green for clips
+                    const guideColor = guide.type === "playhead" ? "var(--color-timeline-drop-indicator)" : "var(--color-snap-guide-clip)";
 
                     return (
                       <div

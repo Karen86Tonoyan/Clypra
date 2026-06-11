@@ -1,5 +1,5 @@
 import React, { useRef, useEffect, useState, useMemo, useCallback } from "react";
-import { usePlayback } from "@/hooks/usePlayback";
+import { usePlaybackClock } from "@/hooks/usePlaybackClock";
 
 interface TimelineRulerProps {
   pixelsPerSecond: number;
@@ -37,7 +37,8 @@ const INTERVAL_TABLE: [number, number][] = [
 const MIN_LABEL_GAP_PX = 80;
 
 export const TimelineRuler: React.FC<TimelineRulerProps> = ({ pixelsPerSecond, scrollLeft }) => {
-  const { frameRate } = usePlayback();
+  const clockState = usePlaybackClock();
+  const frameRate = clockState.frameRate;
   const containerRef = useRef<HTMLDivElement>(null);
   const [viewportWidth, setViewportWidth] = useState(1200);
 

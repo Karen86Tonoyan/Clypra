@@ -1,5 +1,5 @@
 import React, { useRef, useState } from "react";
-import { Magnet, Link2, Mic, Search, ZoomIn, ZoomOut, ArrowLeftRight, Waves, Undo2, Redo2, ScissorsLineDashed, ChevronLeft, ChevronRight, Trash2, Copy } from "lucide-react";
+import { Link2, Mic, Search, ZoomIn, ZoomOut, ArrowLeftRight, Waves, Undo2, Redo2, ScissorsLineDashed, ChevronLeft, ChevronRight, Trash2, Copy } from "lucide-react";
 import { Button } from "@/components/ui/Button";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/Tooltip";
 import { useTimelineStore } from "@/store/timelineStore";
@@ -16,9 +16,8 @@ import { useSplitMode } from "@/hooks/useSplitMode";
 import { EditingActions } from "@/core/interactions";
 
 export const TimelineToolbar: React.FC = () => {
-  const { zoomLevel, pixelsPerSecond, setZoom, swapClips, rippleEditEnabled, toggleRippleEdit, snapEnabled, toggleSnapEnabled, tracks, normalizeTrack } = useTimelineStore();
+  const { zoomLevel, pixelsPerSecond, setZoom, swapClips, rippleEditEnabled, toggleRippleEdit, tracks, normalizeTrack } = useTimelineStore();
   const { selectedClipIds, clearSelection } = useUIStore();
-  const { autoRipple } = useSettingsStore();
   const { state: historyState, undo, redo } = useHistoryStore();
   const [splitMode, setSplitMode] = useState(false);
   // const [linkMode, setLinkMode] = useState(true);
@@ -162,8 +161,8 @@ export const TimelineToolbar: React.FC = () => {
       const clip = clips.find((c) => c.id === clipId);
       if (!clip) return;
       affectedTracks.add(clip.trackId);
-      // Use ripple delete if auto-ripple is enabled, otherwise regular delete
-      if (autoRipple) {
+      // Use ripple delete if ripple mode is enabled, otherwise regular delete
+      if (rippleEditEnabled) {
         execute(new RippleDeleteCommand(clipId));
       } else {
         execute(new DeleteClipCommand(clipId));
@@ -258,13 +257,7 @@ export const TimelineToolbar: React.FC = () => {
             </Button>
           </Tool> */}
 
-          <Tool label="Snap">
-            <Button variant="ghost" size="icon-sm" className={snapEnabled ? activeButton : toolButton} onClick={toggleSnapEnabled}>
-              <Magnet className="w-4 h-4" />
-            </Button>
-          </Tool>
-
-          <Tool label="Ripple edit mode (R) - Hold Shift while trimming">
+          <Tool label="Ripple mode (R) - Affects drag, trim, and delete operations">
             <Button variant="ghost" size="icon-sm" className={rippleEditEnabled ? activeButton : toolButton} onClick={toggleRippleEdit}>
               <Waves className="w-4 h-4" />
             </Button>

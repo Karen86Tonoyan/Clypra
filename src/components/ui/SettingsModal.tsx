@@ -4,6 +4,7 @@ import { openUrl } from "@tauri-apps/plugin-opener";
 import { Modal } from "./Modal";
 import { useSettingsStore, Theme, FontFamily, THEME_META, FONT_META, getThemeColors, getBaseThemeForCustomization, getThemeColorKeys } from "@/store/settingsStore";
 import { useProjectStore } from "@/store/projectStore";
+import { useTimelineStore } from "@/store/timelineStore";
 import { CacheSettings } from "@/components/settings/CacheSettings";
 import { WhisperSettings } from "@/components/settings/WhisperSettings";
 
@@ -246,6 +247,11 @@ function CustomThemeEditor() {
               <option value="midnight">Midnight</option>
               <option value="ocean">Ocean</option>
               <option value="forest">Forest</option>
+              <option value="midnight-carbon">Midnight Carbon</option>
+              <option value="ember-studio">Ember Studio</option>
+              <option value="forest-console">Forest Console</option>
+              <option value="slate-noir">Slate Noir</option>
+              <option value="rose-cut">Rose Cut</option>
             </select>
             <div className="absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none text-text-muted">
               <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -305,7 +311,7 @@ function CustomThemeEditor() {
 function AppearanceTab() {
   const { theme, fontFamily, customTheme, setTheme, setFontFamily } = useSettingsStore();
   const [showCustomEditor, setShowCustomEditor] = useState(false);
-  const themeKeys: Theme[] = ["dark", "midnight", "ocean", "forest"];
+  const themeKeys: Theme[] = ["dark", "midnight", "ocean", "forest", "midnight-carbon", "ember-studio", "forest-console", "slate-noir", "rose-cut"];
   const fontKeys: FontFamily[] = ["inter", "montserrat", "geist", "outfit", "roboto", "space-grotesk", "system", "mono"];
 
   return (
@@ -356,7 +362,8 @@ function AppearanceTab() {
 
 // ─── Editor Tab ──────────────────────────────────────────────────────────
 function EditorTab() {
-  const { snapToGrid, autoRipple, autoSave, defaultFrameRate, setSnapToGrid, setAutoRipple, setAutoSave, setDefaultFrameRate } = useSettingsStore();
+  const { snapToGrid, autoSave, defaultFrameRate, setSnapToGrid, setAutoSave, setDefaultFrameRate } = useSettingsStore();
+  const { snapEnabled, toggleSnapEnabled } = useTimelineStore();
   const { project, updateProject } = useProjectStore();
 
   const frameRates: Array<{ value: 24 | 30 | 60; label: string }> = [
@@ -396,8 +403,8 @@ function EditorTab() {
           <SettingRow label="Snap to grid" description="Clips snap to ruler ticks when dragging">
             <ToggleSwitch checked={snapToGrid} onChange={setSnapToGrid} />
           </SettingRow>
-          <SettingRow label="Auto-ripple" description="Automatically close gaps when deleting clips">
-            <ToggleSwitch checked={autoRipple} onChange={setAutoRipple} />
+          <SettingRow label="Magnetic snap" description="Snap clips to playhead and other clip edges">
+            <ToggleSwitch checked={snapEnabled} onChange={toggleSnapEnabled} />
           </SettingRow>
         </div>
       </section>

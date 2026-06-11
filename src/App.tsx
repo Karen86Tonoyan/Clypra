@@ -1,4 +1,4 @@
-// NLE placement policy for media and clips
+// Deprecated methods used across the system
 import { useState, useEffect } from "react";
 import { LaunchScreen } from "@/components/screens/LaunchScreen";
 import { EditorScreen } from "@/components/screens/EditorScreen";

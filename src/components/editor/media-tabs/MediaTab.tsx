@@ -24,7 +24,6 @@ import { MediaCard } from "@/components/ui/MediaCard";
 export const MediaTab: React.FC<MediaTabProps> = ({ onAddToTimeline }) => {
   const { mediaAssets, removeMediaAsset, addMediaAsset } = useProjectStore();
   const { importMedia, isLoading, toastMessage, clearToast } = useMediaImport();
-  const { autoRipple } = useSettingsStore();
   // Note: previewMediaId is used for visual selection state only.
   // Preview rendering is now timeline-driven, not media-selection driven.
   const { setPreviewMedia, previewMediaId } = useUIStore();
@@ -153,10 +152,11 @@ export const MediaTab: React.FC<MediaTabProps> = ({ onAddToTimeline }) => {
                     beginTransaction("Remove from Timeline");
 
                     // Remove all clips using this asset
+                    const { rippleEditEnabled } = useTimelineStore.getState();
                     clipsToRemove.forEach((clip) => {
                       affectedTracks.add(clip.trackId);
-                      // Use ripple delete if auto-ripple is enabled, otherwise regular delete
-                      if (autoRipple) {
+                      // Use ripple delete if ripple mode is enabled, otherwise regular delete
+                      if (rippleEditEnabled) {
                         execute(new RippleDeleteCommand(clip.id));
                       } else {
                         execute(new DeleteClipCommand(clip.id));

@@ -5,6 +5,7 @@ import { useUIStore } from "@/store/uiStore";
 import type { Clip } from "@/types";
 import { suspendAutoSave, resumeAutoSave } from "@/store/middleware/autoSaveMiddleware";
 import { calculateDraggedBlockDuration } from "@/lib/clipPositions";
+import { usePlaybackClock } from "@/hooks/usePlaybackClock";
 
 // Three-layer architecture imports
 import { locateTrackRegion, type TrackRegion } from "@/lib/trackRegion";
@@ -144,6 +145,8 @@ export interface DragState {
 export function useTimelineDrag(containerRef: RefObject<HTMLDivElement | null>) {
   const { tracks, clips, updateClip, withBatch, normalizeTrack, insertClipAtIndex, removeEmptyNonMainTracks, setSnapGuides, clearSnapGuides } = useTimelineStore();
   const snapEnabled = useTimelineStore((state) => state.snapEnabled);
+  const clockState = usePlaybackClock();
+  const currentTime = clockState.time;
 
   const [dragState, setDragState] = useState<DragState | null>(null);
 
@@ -400,7 +403,7 @@ export function useTimelineDrag(containerRef: RefObject<HTMLDivElement | null>) 
       draggedClipIds: ds.draggedClipIds,
       snapEnabled,
       snapThresholdSeconds: SNAP_THRESHOLD_SECONDS,
-      // playheadTime: currentTime, // Future
+      playheadTime: currentTime, // Snap to playhead position
     });
 
     // Update snap guides for visual feedback

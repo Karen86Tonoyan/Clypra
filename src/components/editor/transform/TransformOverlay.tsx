@@ -552,8 +552,8 @@ export const TransformOverlay: React.FC<TransformOverlayProps> = ({ canvasWidth,
         <div
           className="absolute border inset-0 pointer-events-none transition-all duration-75"
           style={{
-            borderColor: showVerticalCenterGuide || showHorizontalCenterGuide ? "#ff3b30" : "#ffffff",
-            boxShadow: showVerticalCenterGuide || showHorizontalCenterGuide ? "0 0 8px rgba(255, 59, 48, 0.6)" : "0 2px 4px rgba(0, 0, 0, 0.15)",
+            borderColor: showVerticalCenterGuide || showHorizontalCenterGuide ? "var(--color-guide-center)" : "var(--color-handle)",
+            boxShadow: showVerticalCenterGuide || showHorizontalCenterGuide ? "0 0 8px var(--color-guide-center)" : "0 2px 4px rgba(0, 0, 0, 0.15)",
             borderWidth: "1px",
           }}
         />
@@ -591,8 +591,8 @@ export const TransformOverlay: React.FC<TransformOverlayProps> = ({ canvasWidth,
             top: 0,
             width: "1px",
             height: `${displayHeight}px`,
-            backgroundColor: "#ff3b30",
-            boxShadow: "0 0 4px rgba(255, 59, 48, 0.6)",
+            backgroundColor: "var(--color-guide-center)",
+            boxShadow: "0 0 4px var(--color-guide-center)",
             zIndex: 14,
           }}
         />
@@ -605,8 +605,8 @@ export const TransformOverlay: React.FC<TransformOverlayProps> = ({ canvasWidth,
             top: `${centerScreen.y}px`,
             width: `${displayWidth}px`,
             height: "1px",
-            backgroundColor: "#ff3b30",
-            boxShadow: "0 0 4px rgba(255, 59, 48, 0.6)",
+            backgroundColor: "var(--color-guide-center)",
+            boxShadow: "0 0 4px var(--color-guide-center)",
             zIndex: 14,
           }}
         />
@@ -651,8 +651,8 @@ const Handle: React.FC<HandleProps> = ({ position, onMouseDown, scale = 1, left,
       position: "absolute",
       width: `${handleSize}px`,
       height: `${handleSize}px`,
-      backgroundColor: "#ffffff",
-      border: "1px solid rgba(0, 0, 0, 0.25)",
+      backgroundColor: "var(--color-handle)",
+      border: "1px solid var(--color-handle-border)",
       borderRadius: "50%",
       transform: "translate(-50%, -50%)",
       boxShadow: "0 2px 4px rgba(0, 0, 0, 0.18)",
@@ -716,8 +716,8 @@ const Handle: React.FC<HandleProps> = ({ position, onMouseDown, scale = 1, left,
           ...baseStyle,
           left: left + width / 2,
           top: top + height + offset,
-          backgroundColor: "#ffffff",
-          border: "1px solid rgba(0, 0, 0, 0.12)",
+          backgroundColor: "var(--color-handle)",
+          border: "1px solid var(--color-handle-border)",
           borderRadius: "50%",
           width: "20px",
           height: "20px",
@@ -748,7 +748,7 @@ const Handle: React.FC<HandleProps> = ({ position, onMouseDown, scale = 1, left,
       data-transform-handle={position}
     >
       {position === "rotate" && (
-        <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ color: "#1a1a1a" }}>
+        <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ color: "var(--color-bg)" }}>
           <path d="M21 12a9 9 0 0 0-9-9 9.75 9.75 0 0 0-6.74 2.74L3 8" />
           <path d="M3 3v5h5" />
           <path d="M3 12a9 9 0 0 0 9 9 9.75 9.75 0 0 0 6.74-2.74L21 16" />

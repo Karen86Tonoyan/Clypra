@@ -136,6 +136,8 @@ export function handleCreateTrackAndDrop(item: DragItem, monitor: any, insertInd
 
 // Handle dropping media assets onto existing tracks
 export function handleDropOnTrack(item: DragItem, monitor: any, trackId: string) {
+  console.log("[handleDropOnTrack] Called with:", { item, trackId });
+
   const { pixelsPerSecond, scrollLeft } = useTimelineStore.getState();
   const { execute } = useHistoryStore.getState();
 
@@ -145,7 +147,11 @@ export function handleDropOnTrack(item: DragItem, monitor: any, trackId: string)
   const dropTime = offset && containerRect ? (offset.x - containerRect.left + scrollLeft) / pixelsPerSecond : 0;
   const startTime = resolveClipStartTime({ intent: "drop", timelineEndTime: 0, dropTime });
 
+  console.log("[handleDropOnTrack] Calculated:", { offset, containerRect, dropTime, startTime });
+
   if (item.type === "MEDIA_ASSET") {
+    console.log("[handleDropOnTrack] Processing MEDIA_ASSET drop");
+
     const projectState = useProjectStore.getState();
     if (DEFAULT_PLACEMENT_POLICY.autoAdaptSequenceForFirstVisualClip) {
       autoAdaptSequenceForFirstVisualClip({
@@ -169,7 +175,13 @@ export function handleDropOnTrack(item: DragItem, monitor: any, trackId: string)
       height: canvasHeight,
     });
 
+    console.log("[handleDropOnTrack] Created clip:", newClip);
+
     // Use command to add clip (enables undo/redo)
     execute(new AddClipCommand(newClip));
+
+    console.log("[handleDropOnTrack] Executed AddClipCommand");
+  } else {
+    console.log("[handleDropOnTrack] Unknown item type:", item.type);
   }
 }

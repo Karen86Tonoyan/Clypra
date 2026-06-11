@@ -38,8 +38,11 @@ const TrackInner: React.FC<TrackProps> = ({ track, pixelsPerSecond, clips, onCli
     () => ({
       accept: ["MEDIA_ASSET"],
       drop: (item: DragItem, monitor: any) => {
+        console.log("[Track] Drop triggered:", { trackId: track.id, locked: track.locked, type: track.type, item });
         if (!track.locked && track.type !== "text") {
           handleDropOnTrack(item, monitor, track.id);
+        } else {
+          console.log("[Track] Drop rejected - locked or text track");
         }
       },
       canDrop: () => !track.locked && track.type !== "text",
