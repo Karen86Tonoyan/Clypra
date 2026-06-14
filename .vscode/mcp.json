@@ -1,0 +1,16 @@
+{
+  "servers": {
+    "github": {
+      "type": "http",
+      "url": "https://api.githubcopilot.com/mcp/"
+    },
+    "forge": {
+      "command": "npx",
+      "args": ["-y", "@rightnow/forge-mcp-server"]
+    },
+    "browser": {
+      "command": "npx",
+      "args": ["@railsblueprint/blueprint-mcp@latest"]
+    }
+  }
+}
